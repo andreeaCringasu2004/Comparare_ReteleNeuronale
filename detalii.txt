@@ -142,3 +142,65 @@ data/
 
 Tu nu atingi manual nimic din asta — nu redenumești fișiere, nu copiezi tu în validation. Singurul lucru pe care-l faci manual e să organizezi dataset-ul brut inițial în cele două foldere `real/` și `fake/` (dacă nu sunt deja așa), și să editezi cele 2 variabile de path din script.
 Un detaliu la care să fii atent: pentru ca scriptul să găsească fișierele, trebuie ca extensiile să fie cele așteptate (de obicei `.jpg`/`.jpeg`/`.png` — verifică în cod dacă filtrează după extensie). Dacă vrei, îmi poți spune ce format au fișierele din dataset-ul tău descărcat (jpg? png? mp4?) și te ajut să confirmăm că se potrivesc cu ce așteaptă scriptul, ca să nu descoperi abia la rulare că nu ia nimic în calcul.
+
+
+
+////--------------------------------------------------------
+
+
+
+Sunt de fapt **două conexiuni SSH diferite** aici, care se pot confunda ușor — hai să le separăm:
+
+## 1. SSH către server (placa video) — ca să te conectezi și să lucrezi acolo
+
+Asta e conexiunea pe care o folosești deja: `ssh user@ip_server`. Poți folosi:
+
+- **Doar parolă** — funcționează, dar trebuie s-o introduci de fiecare dată când te conectezi (și la fiecare `scp`)
+- **Cheie SSH** — mai sigur și mai comod, nu mai introduci parola de fiecare dată. Recomandat dacă te conectezi des sau lași sesiuni de antrenare lungi și te reconectezi frecvent.
+
+Nu e obligatoriu să faci cheie SSH doar pentru că te conectezi la un GPU — depinde ce-ți oferă providerul (dacă e un serviciu cloud tip Vast.ai, RunPod, Lambda etc., de multe ori **cere** cheie SSH din start, nu acceptă parolă). Dacă providerul tău acceptă parolă, poți merge simplu cu parola.
+
+Dacă vrei totuși cheie SSH (recomand), pe Windows:
+```powershell
+ssh-keygen -t ed25519 -C "emailul_tau@example.com"
+```
+apasă Enter la toate promptu-rile (sau pui o passphrase dacă vrei un strat extra de securitate). Îți generează `id_ed25519` (privată) și `id_ed25519.pub` (publică) în `C:\Users\TuNumele\.ssh\`. Cheia publică o trimiți/adaugi la provider (de obicei ai un câmp "SSH public key" în panoul lor de control).
+
+## 2. Git/GitHub — ca să clonezi și să faci push la propriul repo, de pe server
+
+Asta e **complet separată** de SSH-ul către server. Pentru repo-ul tău `andreeaCringasu2004/Comparare_ReteleNeuronale`:
+
+- **Doar clonare (citire)** — dacă repo-ul e public, nu ai nevoie de nimic special:
+  ```bash
+  git clone https://github.com/andreeaCringasu2004/Comparare_ReteleNeuronale.git
+  ```
+- **Push (să salvezi rezultatele testării înapoi pe GitHub)** — GitHub **nu mai acceptă parolă** pentru push din 2021. Ai nevoie fie de:
+  - **Personal Access Token (PAT)** — cel mai simplu. Îl generezi din GitHub → Settings → Developer settings → Personal access tokens, și îl folosești în loc de parolă când git îți cere autentificare (`git push` → user: username-ul tău, password: token-ul)
+  - **Cheie SSH pentru GitHub** (diferită de cheia SSH pentru server!) — generezi o cheie pe server (`ssh-keygen -t ed25519`), adaugi cheia publică în GitHub → Settings → SSH keys, apoi clonezi cu `git clone git@github.com:...` în loc de `https://`
+
+## Recomandare practică pentru tine
+
+Ca să salvezi rezultatele testării (cod, metrici, poate un `results.md` sau notebook) înapoi pe GitHub din server:
+
+```bash
+# pe server, o singură dată:
+git config --global user.name "Andreea Cringasu"
+git config --global user.email "emailul_tau@example.com"
+
+# generezi un PAT pe github.com, apoi:
+git clone https://github.com/andreeaCringasu2004/Comparare_ReteleNeuronale.git
+cd Comparare_ReteleNeuronale
+# ... faci modificările / rulezi testele ...
+git add .
+git commit -m "Adaug rezultate testare"
+git push
+# la push, user = username-ul tău GitHub, password = PAT-ul (nu parola de cont)
+```
+
+Dacă nu vrei să introduci tokenul de fiecare dată, poți face git să-l țină minte:
+```bash
+git config --global credential.helper store
+```
+(prima dată introduci tokenul, apoi îl reține pe server).
+
+**Deci concluzie:** SSH-ul către GPU (parolă sau cheie, alegi tu / providerul) e independent de autentificarea git către GitHub (token sau cheie SSH separată pentru GitHub). Nu se amestecă una cu alta.
