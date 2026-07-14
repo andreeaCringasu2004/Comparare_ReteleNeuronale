@@ -1,0 +1,144 @@
+Optiuni pt transfer pe placa grafica
+
+Opțiunea 1: scp (cel mai simplu, vine deja instalat pe Windows)
+Windows 10/11 au clientul OpenSSH inclus by default (Settings → Apps → Optional Features → verifică "OpenSSH Client"). Deschizi PowerShell sau CMD și rulezi:
+powershellscp -r C:\Users\TuNumele\Downloads\dataset user@ip_server:/home/user/dataset
+
+-r = recursiv, pentru foldere
+Dacă serverul are port SSH custom: adaugi -P 2222 (P mare, spre deosebire de ssh unde e -p mic)
+
+Pentru un fișier arhivă (mult mai rapid decât mii de fișiere individuale):
+powershellscp dataset.zip user@ip_server:/home/user/
+apoi pe server: unzip dataset.zip (sau tar -xzf dacă e .tar.gz).
+Sfat important: dacă dataset-ul are multe fișiere mici (imagini de antrenament, de exemplu), arhivează-l local întâi (zip sau tar.gz) și trimite arhiva — e mult mai rapid decât să transferi mii de fișiere separate prin scp, care are overhead per fișier.
+Opțiunea 2: rsync (mai bun pentru dataset-uri mari / reluare transfer întrerupt)
+rsync nu vine nativ pe Windows. Ai trei căi:
+a) WSL (recomandat) — cel mai simplu și robust:
+powershellwsl --install
+apoi în terminalul WSL (Ubuntu):
+bashsudo apt update && sudo apt install rsync -y
+rsync -avz --progress /mnt/c/Users/TuNumele/Downloads/dataset/ user@ip_server:/home/user/dataset/
+(/mnt/c/... e cum WSL vede discul tău C:)
+b) Git Bash — nu are rsync by default, dar poți instala prin MSYS2/pacman dacă ai Git for Windows cu MSYS2 la bază, e mai complicat decât WSL.
+c) cwRsync — un build standalone de rsync pentru Windows, dar e mai vechi/mai puțin întreținut. WSL e mai simplu în 2026.
+-avz = archive mode + verbose + compresie; --progress îți arată progresul. Avantajul rsync față de scp: dacă transferul se întrerupe, poți relua doar ce lipsește, fără să iei totul de la capăt.
+
+
+////------------------------------
+
+
+Am verificat repo-ul. Vestea bună: **codul de antrenare nu trebuie uploadat manual** — îl clonezi direct pe server cu `git clone`, mult mai simplu decât scp. Doar **dataset-ul** (care nu e ținut în git, e în `.gitignore`) trebuie urcat de pe Windows.
+
+## Pas 1: Clonezi repo-ul direct pe server (prin SSH)
+
+Te conectezi la server (`ssh user@ip_server`) și acolo rulezi:
+
+```bash
+git clone https://github.com/TRahulsingh/DeepfakeDetector.git
+cd DeepfakeDetector
+pip install -r requirements.txt
+```
+
+Asta îți aduce `main_trainer.py`, `config.yaml`, `lightning_modules/`, `datasets/`, `tools/` etc. — tot ce ține de antrenare. Nimic din astea nu trebuie transferat de pe Windows.
+
+## Pas 2: Structura pe care o așteaptă dataset-ul
+
+Repo-ul se așteaptă la un folder `data/` cu exact această structură:
+
+```
+data/
+├── train/
+│   ├── real/
+│   │   ├── image1.jpg
+│   └── fake/
+│       ├── fake1.jpg
+└── validation/
+    ├── real/
+    └── fake/
+```
+
+Dacă dataset-ul tău descărcat local nu e deja organizat așa, cel mai simplu e:
+1. Îl urci pe server ca arhivă (vezi Pas 3)
+2. Îl reorganizezi pe server cu scripturile din `tools/`:
+   - `tools/split_train_val.py` — împarte un set de imagini 80/20 în train/validation
+   - `tools/split_video_dataset.py` — dacă ai videoclipuri, extrage frame-uri și le împarte automat
+   - `tools/split_dataset.py` — extrage frame-uri dintr-un singur folder de video
+
+   **Atenție:** aceste scripturi nu iau argumente din linia de comandă — trebuie să editezi manual căile (`source`/`dest` etc.) direct în fișierul `.py` înainte de a-l rula (cu `nano tools/split_train_val.py` de exemplu).
+
+## Pas 3: Urci dataset-ul local pe server
+
+Arhivează-l local (ca să fie un singur transfer, nu mii de fișiere mici):
+
+```powershell
+Compress-Archive -Path C:\Users\TuNumele\Downloads\dataset -DestinationPath dataset.zip
+scp dataset.zip user@ip_server:~/DeepfakeDetector/
+```
+
+Pe server:
+```bash
+cd ~/DeepfakeDetector
+unzip dataset.zip -d data_raw   # sau alt nume, temporar, înainte de a-l reorganiza în data/
+```
+
+## Pas 4: Configurezi și pornești antrenarea
+
+Pe server, editezi `config.yaml` (deja e setat corect implicit dacă respecți structura `data/train`, `data/validation`):
+
+```yaml
+train_paths:
+  - data/train
+val_paths:
+  - data/validation
+lr: 0.0001
+batch_size: 4
+num_epochs: 10
+```
+
+Apoi pornești:
+```bash
+python main_trainer.py
+```
+
+Poți monitoriza progresul cu:
+```bash
+tensorboard --logdir lightning_logs
+```
+
+---
+
+**Deci, pe scurt, singurul lucru pe care chiar trebuie să-l urci manual de pe Windows este arhiva cu dataset-ul** — codul vine prin `git clone` direct pe server. Vrei să te ajut cu scriptul de reorganizare a dataset-ului (ce format are exact ce ai descărcat tu — e video sau imagini?), ca să știi exact ce path-uri să editezi în `tools/split_train_val.py`?
+
+
+
+////------------------------------
+
+
+Exact — nu trebuie să creezi tu manual folderele și să pui poze în ele. Scriptul `split_train_val.py` face totul automat:
+
+1. Tu îi dai un **singur folder sursă** care conține deja subfolderele `real/` și `fake/` (nesortat train/validation, doar cele două clase)
+2. Scriptul citește toate fișierele din `real/` și `fake/`, le amestecă, ia automat 80% și le pune în `data/train/real` + `data/train/fake`, iar restul de 20% le pune singur în `data/validation/real` + `data/validation/fake`
+3. **Folderele de destinație le creează tot el** — nu trebuie să le faci tu în avans, nici să pui ceva manual în `validation/`
+
+Deci fluxul e:
+
+```
+dataset_brut/
+├── real/     ← toate pozele reale, amestecate, orice denumire
+└── fake/     ← toate pozele fake, amestecate, orice denumire
+```
+
+↓ rulezi scriptul (după ce editezi `source_dataset` să pointeze spre `dataset_brut/` și `destination` spre `data/`) ↓
+
+```
+data/
+├── train/
+│   ├── real/       ← 80%, pus automat de script
+│   └── fake/       ← 80%, pus automat de script
+└── validation/
+    ├── real/       ← 20%, pus automat de script
+    └── fake/       ← 20%, pus automat de script
+```
+
+Tu nu atingi manual nimic din asta — nu redenumești fișiere, nu copiezi tu în validation. Singurul lucru pe care-l faci manual e să organizezi dataset-ul brut inițial în cele două foldere `real/` și `fake/` (dacă nu sunt deja așa), și să editezi cele 2 variabile de path din script.
+Un detaliu la care să fii atent: pentru ca scriptul să găsească fișierele, trebuie ca extensiile să fie cele așteptate (de obicei `.jpg`/`.jpeg`/`.png` — verifică în cod dacă filtrează după extensie). Dacă vrei, îmi poți spune ce format au fișierele din dataset-ul tău descărcat (jpg? png? mp4?) și te ajut să confirmăm că se potrivesc cu ce așteaptă scriptul, ca să nu descoperi abia la rulare că nu ia nimic în calcul.
