@@ -1,0 +1,47 @@
+## Comenzile pt a downloada direct datasetul din online (Dataseturi descaracate: Celeb_DF si Celeb-DF-v2)
+
+  practica@ubuntu63:~/deepfake_env/datasets$ source ~/deepfake_env/bin/activate
+(deepfake_env) practica@ubuntu63:~/deepfake_env/datasets$ pip install gdown
+Collecting gdown
+  Downloading gdown-6.1.0-py3-none-any.whl.metadata (8.3 kB)
+Requirement already satisfied: beautifulsoup4 in /home/practica/deepfake_env/lib/python3.12/site-packages (from gdown) (4.15.0)
+Collecting filelock (from gdown)
+  Downloading filelock-3.29.7-py3-none-any.whl.metadata (2.0 kB)
+Requirement already satisfied: requests[socks] in /home/practica/deepfake_env/lib/python3.12/site-packages (from gdown) (2.34.2)
+Requirement already satisfied: tqdm in /home/practica/deepfake_env/lib/python3.12/site-packages (from gdown) (4.68.4)
+Requirement already satisfied: soupsieve>=1.6.1 in /home/practica/deepfake_env/lib/python3.12/site-packages (from beautifulsoup4->gdown) (2.8.4)
+Requirement already satisfied: typing-extensions>=4.0.0 in /home/practica/deepfake_env/lib/python3.12/site-packages (from beautifulsoup4->gdown) (4.16.0)
+Requirement already satisfied: charset_normalizer<4,>=2 in /home/practica/deepfake_env/lib/python3.12/site-packages (from requests[socks]->gdown) (3.4.9)
+Requirement already satisfied: idna<4,>=2.5 in /home/practica/deepfake_env/lib/python3.12/site-packages (from requests[socks]->gdown) (3.18)
+Requirement already satisfied: urllib3<3,>=1.26 in /home/practica/deepfake_env/lib/python3.12/site-packages (from requests[socks]->gdown) (2.7.0)
+Requirement already satisfied: certifi>=2023.5.7 in /home/practica/deepfake_env/lib/python3.12/site-packages (from requests[socks]->gdown) (2026.6.17)
+Collecting PySocks!=1.5.7,>=1.5.6 (from requests[socks]->gdown)
+  Downloading PySocks-1.7.1-py3-none-any.whl.metadata (13 kB)
+Downloading gdown-6.1.0-py3-none-any.whl (19 kB)
+Downloading filelock-3.29.7-py3-none-any.whl (46 kB)
+Downloading PySocks-1.7.1-py3-none-any.whl (16 kB)
+Installing collected packages: PySocks, filelock, gdown
+Successfully installed PySocks-1.7.1 filelock-3.29.7 gdown-6.1.0
+(deepfake_env) practica@ubuntu63:~/deepfake_env/datasets$ gdown 10NGF38RgF8FZneKOuCOdRIsPzpC7_WDd
+Downloading...
+From (original): https://drive.google.com/uc?id=10NGF38RgF8FZneKOuCOdRIsPzpC7_WDd
+From (redirected): https://drive.google.com/uc?id=10NGF38RgF8FZneKOuCOdRIsPzpC7_WDd&confirm=t&uuid=03244928-9375-4160-a411-1188720833cb
+To: /home/practica/deepfake_env/datasets/Celeb-DF.zip
+100%|█████████████████████████████████████████████████████████████████████████████| 2.12G/2.12G [00:44<00:00, 47.8MB/s]
+(deepfake_env) practica@ubuntu63:~/deepfake_env/datasets$ ls
+Celeb-DF.zip  dataset10.zip  dataset2.zip
+(deepfake_env) practica@ubuntu63:~/deepfake_env/datasets$ rm dataset10.zip dataset2.zip
+(deepfake_env) practica@ubuntu63:~/deepfake_env/datasets$ ls
+Celeb-DF.zip
+(deepfake_env) practica@ubuntu63:~/deepfake_env/datasets$ python3 -m zipfile -e Celeb-DF.zip Celeb-DF
+(deepfake_env) practica@ubuntu63:~/deepfake_env/datasets$ ls
+Celeb-DF  Celeb-DF.zip
+(deepfake_env) practica@ubuntu63:~/deepfake_env/datasets$ gdown 1iLx76wsbi9itnkxSqz9BVBl4ZvnbIazj
+Downloading...
+From (original): https://drive.google.com/uc?id=1iLx76wsbi9itnkxSqz9BVBl4ZvnbIazj
+From (redirected): https://drive.google.com/uc?id=1iLx76wsbi9itnkxSqz9BVBl4ZvnbIazj&confirm=t&uuid=47494b1b-21f9-4e46-b640-33491397398d
+To: /home/practica/deepfake_env/datasets/Celeb-DF-v2.zip
+100%|█████████████████████████████████████████████████████████████████████████████| 9.95G/9.95G [03:00<00:00, 55.2MB/s]
+(deepfake_env) practica@ubuntu63:~/deepfake_env/datasets$ ls
+Celeb-DF  Celeb-DF-v2.zip  Celeb-DF.zip
+(deepfake_env) practica@ubuntu63:~/deepfake_env/datasets$ python3 -m zipfile -e Celeb-DF-v2.zip Celeb-DF-v2
