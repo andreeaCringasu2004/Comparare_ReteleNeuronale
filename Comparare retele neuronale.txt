@@ -1,0 +1,492 @@
+Comparare retele neuronale
+
+Da. De fapt ai deja o bază bună: repo-ul `TRahulsingh/DeepfakeDetector` îți oferă **pipeline-ul de pregătire a datelor + un model EfficientNet**, iar tu vrei să îl extinzi cu trei direcții:
+
+1. **CNN pe cadre individuale (frame-based)**
+2. **CNN + LSTM pe secvențe de cadre (video-based)**
+3. **GAN/deepfake detection pe caracteristici specifice**
+
+Cheia este să folosești **același dataset Celeb-DF/Celeb-DF-v2 pregătit o singură dată** și să schimbi doar modelul.
+
+---
+
+# 1. Extracția frame-urilor din video
+
+Repo-ul are deja instrumentul:
+
+```
+tools/
+├── split_video_dataset.py
+├── split_dataset.py
+├── split_train_val.py
+```
+
+Cel mai important pentru tine este:
+
+```
+tools/split_video_dataset.py
+```
+
+El face:
+
+```
+video.mp4
+   |
+   | OpenCV
+   |
+   ↓
+frame_001.jpg
+frame_002.jpg
+frame_003.jpg
+...
+```
+
+și creează:
+
+```
+train/
+├── real/
+│   ├── video1_f0.jpg
+│   ├── video1_f15.jpg
+│
+└── fake/
+    ├── video2_f0.jpg
+```
+
+Asta este perfect pentru CNN.
+
+---
+
+## Eu aș modifica puțin extractorul
+
+Acum ai:
+
+```python
+frames_per_video=5
+every_n_frames=15
+```
+
+Pentru deepfake detection aș folosi:
+
+```python
+frames_per_video=20
+every_n_frames=5
+```
+
+adică:
+
+* iei 20 frame-uri/video
+* sari doar câte 5 frame-uri
+
+Exemplu:
+
+```python
+def extract_and_split_videos(
+    source_dir,
+    dest_dir,
+    split_ratio=0.8,
+    frames_per_video=20,
+    every_n_frames=5
+):
+```
+
+---
+
+# 2. Dataset comun pentru toate modelele
+
+După extracție ai:
+
+```
+videos/
+└── Celeb-DF-v2/
+    |
+    ├── train/
+    │   ├── real/
+    │   └── fake/
+    |
+    └── validation/
+        ├── real/
+        └── fake/
+```
+
+Asta îl poți folosi pentru toate.
+
+---
+
+# 3. CNN pe frame-uri (modelul tău)
+
+Modelul tău:
+
+```python
+Conv2D
+MaxPooling
+Conv2D
+MaxPooling
+Flatten
+Dense
+```
+
+este un CNN 2D clasic.
+
+Datasetul trebuie să fie:
+
+```
+X:
+[
+ frame1,
+ frame2,
+ frame3
+]
+
+shape:
+
+(batch,224,224,3)
+```
+
+Deci folosești direct imaginile:
+
+```
+train/
+├── real/*.jpg
+└── fake/*.jpg
+```
+
+---
+
+Poți crea:
+
+```
+models/
+├── cnn.py
+├── lstm.py
+└── gan_detector.py
+```
+
+---
+
+## cnn.py
+
+Exemplu:
+
+```python
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import *
+
+
+model = Sequential([
+
+Conv2D(
+32,
+(3,3),
+activation="relu",
+input_shape=(224,224,3)
+),
+
+MaxPooling2D(),
+
+Conv2D(
+64,
+(3,3),
+activation="relu"
+),
+
+MaxPooling2D(),
+
+Flatten(),
+
+Dense(
+128,
+activation="relu"
+),
+
+Dropout(0.5),
+
+Dense(
+1,
+activation="sigmoid"
+)
+
+])
+
+
+model.compile(
+optimizer="adam",
+loss="binary_crossentropy",
+metrics=["accuracy"]
+)
+```
+
+---
+
+# 4. CNN + LSTM pentru video
+
+Aici este mai interesant.
+
+Nu mai vezi frame-ul separat.
+
+Vezi:
+
+```
+video.mp4
+
+↓
+
+[
+frame1,
+frame2,
+frame3,
+...
+frame20
+]
+
+↓
+
+CNN extrage feature
+
+↓
+
+LSTM învață evoluția temporală
+```
+
+Structura:
+
+```
+Video
+ |
+ |
+20 frames
+ |
+ |
+CNN
+ |
+ |
+LSTM
+ |
+ |
+Fake/Real
+```
+
+Model:
+
+```python
+from tensorflow.keras.layers import *
+
+
+model = Sequential([
+
+TimeDistributed(
+Conv2D(
+32,
+(3,3),
+activation="relu"
+),
+input_shape=(20,224,224,3)
+),
+
+TimeDistributed(MaxPooling2D()),
+
+
+TimeDistributed(
+Flatten()
+),
+
+
+LSTM(128),
+
+
+Dense(
+1,
+activation="sigmoid"
+)
+
+])
+```
+
+Input:
+
+```
+(batch,20,224,224,3)
+```
+
+---
+
+Aici trebuie să modifici loader-ul.
+
+În loc de:
+
+```
+image -> label
+```
+
+trebuie:
+
+```
+20 images -> label
+```
+
+---
+
+# 5. GAN detection
+
+Aici trebuie să clarificăm ceva.
+
+Un GAN detector nu înseamnă neapărat că antrenezi un GAN.
+
+În deepfake detection, GAN-based poate însemna:
+
+* extractor de features
+* discriminator
+* model antrenat pe imagini generate
+
+Structură:
+
+```
+Real images
+Fake images
+      |
+      |
+Generator features
+      |
+      |
+Discriminator
+      |
+      |
+Fake probability
+```
+
+Pentru GAN ai nevoie de:
+
+```
+generator.py
+discriminator.py
+```
+
+sau poți folosi un encoder:
+
+```
+EfficientNet
+      |
+features
+      |
+classifier
+```
+
+De fapt modelul din repo:
+
+```
+EfficientNet-B0
+```
+
+este deja o abordare modernă de discriminator.
+
+---
+
+# 6. Cum aș organiza proiectul tău
+
+Eu aș face:
+
+```
+DeepfakeDetector/
+
+├── datasets/
+
+├── videos/
+
+│
+├── preprocessing/
+│   |
+│   └── extract_frames.py
+│
+├── models/
+│   |
+│   ├── cnn.py
+│   ├── cnn_lstm.py
+│   └── gan_detector.py
+│
+├── train/
+│   |
+│   ├── train_cnn.py
+│   ├── train_lstm.py
+│   └── train_gan.py
+│
+├── results/
+│
+└── config.yaml
+```
+
+---
+
+# 7. Ce aș face în ordinea corectă
+
+Pentru lucrare/proiect:
+
+### Experiment 1:
+
+CNN simplu
+
+Dataset:
+
+```
+Celeb-DF
+```
+
+Metrici:
+
+* accuracy
+* precision
+* recall
+* F1
+
+---
+
+### Experiment 2:
+
+CNN + LSTM
+
+Dataset:
+
+```
+Celeb-DF-v2
+```
+
+Metrici:
+
+* accuracy video
+* ROC-AUC
+
+---
+
+### Experiment 3:
+
+EfficientNet (repo-ul actual)
+
+Compari:
+
+```
+CNN
+CNN-LSTM
+EfficientNet
+```
+
+---
+
+### Experiment 4:
+
+GAN/Deepfake features
+
+Compari:
+
+```
+GAN detector
+```
+
+---
+
+Practic, repo-ul pe care îl folosești îți dă deja **baseline-ul EfficientNet**. Tu trebuie să adaugi doar:
+
+* `cnn.py`
+* `cnn_lstm.py`
+* dataset loader pentru secvențe
+* evaluare comună.
+
+Următorul pas concret ar fi să îți facem un **loader compatibil cu Celeb-DF-v2 care produce atât imagini pentru CNN, cât și secvențe de 20 frame-uri pentru LSTM**, ca să nu mai copiezi datasetul de mai multe ori.
