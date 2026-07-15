@@ -1,0 +1,702 @@
+
+Baza de date cu care lucrezi (Celeb-DF / Celeb-DF-v2) conține fișiere video (format .mp4). Din structura pe care o ai:
+videos / [Celeb-DF sau Celeb-DF-v2] / [raw / train / validation] / [real / fake]
+
+Pentru a putea antrena rețele neuronale (CNN, LSTM, GAN și combinații), nu poți introduce direct fișierele video în format brut, ci trebuie să parcurgi anumiți pași de procesare. Din codul tău actual, extragi 25 de cadre din fiecare video sub formă de array-uri NumPy (25, 224, 224, 3).
+
+Mai jos îți propun o strategie clară, împărțită pe fișiere dedicate, structurate special pentru a-ți asigura cele 4 arhitecturi cerute, cu integrare TensorBoard pentru a putea compara rezultatele pe grafice.
+
+Strategia de organizare a datelor (De la imagini la secvențe)
+Deoarece ai deja un script care împarte datasetul în 80% train și 20% validation, poți aborda pregătirea datelor în două moduri:
+
+Abordarea Frame-by-Frame (pentru CNN simplu și GAN): Salvezi cadrele extrase direct ca imagini independente într-un nou director sau folosești un generator în Python.
+
+Abordarea Secvențială / Video (pentru LSTM și CNN-LSTM): Ai nevoie de un tensor de forma (Batch, Cadre, Inaltime, Latime, Canale) (de exemplu, (32, 25, 224, 224, 3)).
+
+Fișierul 1: Modelul CNN (Clasificare Frame-by-Frame)
+Acest model tratează fiecare cadru din video ca pe o imagine separată. Dacă majoritatea cadrelor dintr-un video fake sunt detectate ca fake, atunci întregul video este considerat fake.
+
+Python
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Dropout
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+import datetime
+
+# 1. Pregătirea datelor (folosind directoarele cu imagini extrase sau Generator dedicat)
+# Presupunem că ai salvat cadrele în directoare separate 'train' și 'validation'
+train_datagen = ImageDataGenerator(rescale=1./255)
+val_datagen = ImageDataGenerator(rescale=1./255)
+
+train_generator = train_datagen.flow_from_directory(
+    'path_catre_date/train',
+    target_size=(224, 224),
+    batch_size=32,
+    class_mode='binary'
+)
+
+val_generator = val_datagen.flow_from_directory(
+    'path_catre_date/validation',
+    target_size=(224, 224),
+    batch_size=32,
+    class_mode='binary'
+)
+
+# 2. Definiție Model CNN
+model_cnn = Sequential([
+    Conv2D(32, (3, 3), activation='relu', input_shape=(224, 224, 3)),
+    MaxPooling2D(2, 2),
+    Conv2D(64, (3, 3), activation='relu'),
+    MaxPooling2D(2, 2),
+    Conv2D(128, (3, 3), activation='relu'),
+    MaxPooling2D(2, 2),
+    Flatten(),
+    Dense(128, activation='relu'),
+    Dropout(0.5),
+    Dense(1, activation='sigmoid') # Clasificare binară: Real sau Fake
+])
+
+model_cnn.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+
+# 3. Integrare TensorBoard
+log_dir = "logs/fit/cnn_" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
+
+# 4. Antrenare
+model_cnn.fit(
+    train_generator,
+    validation_data=val_generator,
+    epochs=10,
+    callbacks=[tensorboard_callback]
+)
+Fișierul 2: Modelul LSTM / CNN-LSTM (Analiza Secvențială)
+Deepfake-urile video conțin imperfecțiuni temporale (clipit nenatural, mișcări bruște ale feței dintr-un cadru în altul). Un simplu CNN scapă aceste detalii din vedere, însă un LSTM combinat cu un CNN le va detecta.
+
+Vom folosi o structură de tip TimeDistributed, unde un CNN (poți folosi chiar o rețea preantrenată precum MobileNetV2 sau ResNet pentru a economisi timp și resurse) extrage trăsăturile fiecărui cadru, iar stratul LSTM analizează tranzițiile dintre ele.
+
+Python
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import TimeDistributed, Conv2D, MaxPooling2D, Flatten, LSTM, Dense, Dropout
+import datetime
+
+# Formatul inputului: (None, 25, 224, 224, 3) -> 25 de cadre per video
+model_lstm = Sequential([
+    # Extragerea caracteristicilor din fiecare cadru în mod separat dar consecutiv
+    TimeDistributed(Conv2D(16, (3, 3), activation='relu'), input_shape=(25, 224, 224, 3)),
+    TimeDistributed(MaxPooling2D(2, 2)),
+    TimeDistributed(Conv2D(32, (3, 3), activation='relu')),
+    TimeDistributed(MaxPooling2D(2, 2)),
+    TimeDistributed(Flatten()),
+    
+    # Stratul LSTM care analizează dinamica dintre cele 25 de cadre
+    LSTM(64, return_sequences=False),
+    
+    Dense(64, activation='relu'),
+    Dropout(0.4),
+    Dense(1, activation='sigmoid')
+])
+
+model_lstm.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+model_lstm.summary()
+
+# Configurare TensorBoard
+log_dir = "logs/fit/lstm_" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
+
+# Notă: Pentru antrenare va trebui să creezi un generator personalizat (tf.data.Dataset) 
+# care să returneze batch-uri de forma (X_batch, y_batch) unde X_batch are dimensiunea (Batch_Size, 25, 224, 224, 3)
+# model_lstm.fit(train_dataset, validation_data=val_dataset, epochs=10, callbacks=[tensorboard_callback])
+Fișierul 3: Rețele GAN (Generative Adversarial Networks) pentru Detecție
+În detecția Deepfake, GAN-urile nu sunt folosite doar pentru a genera imagini false, ci pot fi utilizate pentru detecția de anomalii (de exemplu, un model Anogan sau un Discriminator antrenat semi-supervizat).
+
+O abordare eficientă este să folosești Discriminatorul dintr-un GAN antrenat ca extractor avansat de trăsături sau clasificator direct. Discriminatorul învață să caute cele mai fine detalii artificiale introduse de Generatoare.
+
+Python
+import tensorflow as tf
+from tensorflow.keras.layers import Dense, Flatten, Reshape, Conv2D, Conv2DTranspose, LeakyReLU, Dropout
+from tensorflow.keras.models import Sequential
+
+# Generatorul: Încearcă să creeze cadre/fețe cât mai reale din zgomot aleatoriu (ex. vector de 100)
+def build_generator():
+    model = Sequential([
+        Dense(7 * 7 * 256, input_dim=100),
+        LeakyReLU(alpha=0.2),
+        Reshape((7, 7, 256)),
+        Conv2DTranspose(128, (4,4), strides=(2,2), padding='same'),
+        LeakyReLU(alpha=0.2),
+        Conv2DTranspose(64, (4,4), strides=(2,2), padding='same'),
+        LeakyReLU(alpha=0.2),
+        Conv2DTranspose(3, (4,4), strides=(2,2), padding='same', activation='tanh') # Output: (56, 56, 3) - poți scala la 224x224
+    ])
+    return model
+
+# Discriminatorul: El este cel care devine „Detectorul” tău de Deepfake
+def build_discriminator():
+    model = Sequential([
+        Conv2D(64, (3,3), strides=(2,2), padding='same', input_shape=(56, 56, 3)),
+        LeakyReLU(alpha=0.2),
+        Dropout(0.3),
+        Conv2D(128, (3,3), strides=(2,2), padding='same'),
+        LeakyReLU(alpha=0.2),
+        Dropout(0.3),
+        Flatten(),
+        Dense(1, activation='sigmoid') # Califică: 1 = Real, 0 = Fake (Generat)
+    ])
+    return model
+
+# Discriminatorul se va antrena alternativ în cadrul buclei GAN scrise manual (Custom Training Loop), 
+# salvând metricile în TensorBoard cu tf.summary.scalar()
+Vizualizarea și compararea datelor în TensorBoard
+Pentru a porni TensorBoard și a analiza graficele de Loss și Accuracy în paralel pentru toate cele 3 sau 4 modele, deschide terminalul (în mediul tău virtual Anaconda unde ai instalat TensorFlow) și rulează următoarea comandă:
+
+Bash
+tensorboard --logdir=logs/fit/
+Accesează apoi adresa web afișată (de regulă http://localhost:6006/). În interfața grafică vei vedea curbele de învățare suprapuse, permițându-ți să concluzionezi:
+
+Care model converge mai repede.
+
+Unde apare fenomenul de overfitting (când acuratețea pe setul de validare scade, deși pe setul de train crește).
+
+Care rețea obține performanțe mai bune pe setul de validare de 20%.
+
+Ce arhitectură se va potrivi cel mai bine? (Predictor teoretic)
+Combinația CNN-LSTM (Fișierul 2) se va potrivi, cel mai probabil, cel mai bine pentru analiza video. Aceasta analizează atât contextul spațial (fața din imagine prin CNN), cât și corelația temporală (cum se schimbă pixelii de la un cadru la altul prin LSTM), oferind o acuratețe superioară față de un simplu CNN frame-by-frame pe setul de date Celeb-DF.
+
+pasii de procesare ca din videouri sa am imagini as vrea sa ii folosesti din git-ul https://github.com/TRahulsingh/DeepfakeDetector si ideea e sa le si combini in varinate in care ar fi mai okay de exemplu doar detectorul din GANs sau CNN cu LSTM si alte combinatii care s-ar potrivii pt ca eu vreau ca la un moment dat sa pun un video si sa il verific daca are deepfake si unde, ca sa pot face si un fel de raport de audit, dar momentan trebuie sa fac doar testarea si compararea retelelor ca sa pot determina cea mai buna sau cele mai bune 2 variante care sa mearga pt ce voi dorii eu sa fac pe mai departe
+
+Pe baza scriptului tău de extragere a cadrelor și a logicii actuale din fișierul .ipynb, ai deja un punct de plecare excelent. În codul tău, extragi un tensor de forma (25, 224, 224, 3) (adică 25 de imagini/cadre RGB redimensionate la 224x224 dintr-un singur video).
+
+Așa cum ai menționat, scopul tău final este un audit video: adică vrei să introduci un video complet și să obții nu doar o predicție generală, ci să vezi unde anume în interiorul videoului (pe ce intervale de cadre sau secunde) se află modificările de tip deepfake.
+
+Pentru a atinge acest obiectiv, modul în care combini rețelele este crucial. Mai jos îți prezint cum să structurezi fișierele pentru fiecare experiment, cum să implementezi combinațiile cerute, cum să integrezi TensorBoard și care este strategia pentru viitorul raport de audit.
+
+Fișierul 1: Modelul CNN Pur (Clasificare pe bază de Cadru)
+Acest model tratează cele 25 de cadre ca pe niște imagini complet independente.
+
+Cum funcționează: Primește un batch de cadre, oferă o probabilitate pentru fiecare cadru în parte (0 = Real, 1 = Fake), iar la final faci media predicțiilor cadrelor pentru a clasifica videoul.
+
+De ce te ajută la audit: Este cel mai ușor de folosit pentru raportul final, deoarece îți poate spune exact: "Cadrul 12 din videoclip are o probabilitate de 98% de a fi Deepfake".
+
+Python
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Dropout
+import datetime
+
+# Modelul tău CNN adaptat din Notebook
+def build_cnn_model():
+    model = Sequential([
+        Conv2D(32, (3, 3), activation="relu", input_shape=(224, 224, 3)),
+        MaxPooling2D(),
+        Conv2D(64, (3, 3), activation="relu"),
+        MaxPooling2D(),
+        Flatten(),
+        Dense(128, activation="relu"),
+        Dropout(0.5), 
+        Dense(1, activation="sigmoid")
+    ])
+    model.compile(optimizer="adam", loss="binary_crossentropy", metrics=["accuracy"])
+    return model
+
+# Setup TensorBoard
+log_dir = "logs/fit/cnn_pure_" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
+
+# Notă antrenare: Cadrele trebuie trimise ca imagini individuale (X_train.shape -> [Batch, 224, 224, 3])
+# model.fit(X_train, y_train, validation_data=(X_val, y_val), epochs=10, callbacks=[tensorboard_callback])
+Fișierul 2: Modelul Combinat CNN + LSTM (Analiză Spațio-Temporală)
+Deepfake-urile video au adesea probleme de consistență între cadre (de exemplu, ochiul clipește greșit sau marginile feței tremură de la o imagine la alta). Un CNN simplu nu vede asta, dar un LSTM adăugat după CNN va analiza mișcarea (axa timpului).
+
+Cum funcționează: Folosim un strat numit TimeDistributed. Acesta rulează CNN-ul pe fiecare dintre cele 25 de cadre pentru a extrage caracteristicile vizuale, iar vectorul rezultat este trimis în rețeaua LSTM care decide dacă succesiunea mișcărilor este naturală.
+
+Python
+from tensorflow.keras.layers import TimeDistributed, LSTM
+
+def build_cnn_lstm_model():
+    model = Sequential([
+        # TimeDistributed aplică rețeaua convoluțională pe fiecare din cele 25 de cadre în parte
+        TimeDistributed(Conv2D(32, (3, 3), activation="relu"), input_shape=(25, 224, 224, 3)),
+        TimeDistributed(MaxPooling2D()),
+        TimeDistributed(Conv2D(64, (3, 3), activation="relu")),
+        TimeDistributed(MaxPooling2D()),
+        TimeDistributed(Flatten()),
+        
+        # LSTM preia cele 25 de momente de timp analizate anterior de CNN
+        LSTM(64, return_sequences=False), 
+        
+        Dense(64, activation="relu"),
+        Dropout(0.5),
+        Dense(1, activation="sigmoid")
+    ])
+    model.compile(optimizer="adam", loss="binary_crossentropy", metrics=["accuracy"])
+    return model
+
+log_dir = "logs/fit/cnn_lstm_" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
+
+# Notă antrenare: Aici datele păstrează structura de video (X_train.shape -> [Batch, 25, 224, 224, 3])
+Fișierul 3: Modelul GAN (Folosind doar Discriminatorul ca Detector)
+În mod normal, un GAN învață să genereze imagini (Generatorul) și să detecteze falsurile (Discriminatorul). În cazul tău, folosești doar structura Discriminatorului. El este prin definiție un detector antrenat la un nivel extrem de fin pentru a găsi artefacte și anomalii matematice lăsate în urmă de algoritmii de inteligență artificială.
+
+Python
+from tensorflow.keras.layers import LeakyReLU
+
+def build_gan_discriminator():
+    # Structura clasică de Discriminator GAN folosită pe post de detector avansat de imagini
+    model = Sequential([
+        Conv2D(64, (5, 5), strides=(2, 2), padding="same", input_shape=(224, 224, 3)),
+        LeakyReLU(alpha=0.2),
+        Dropout(0.3),
+        
+        Conv2D(128, (5, 5), strides=(2, 2), padding="same"),
+        LeakyReLU(alpha=0.2),
+        Dropout(0.3),
+        
+        Flatten(),
+        Dense(1, activation="sigmoid")
+    ])
+    model.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.0002, beta_1=0.5), 
+                  loss="binary_crossentropy", metrics=["accuracy"])
+    return model
+
+log_dir = "logs/fit/gan_discriminator_" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir=log_dir, histogram_freq=1)
+Fișierul 4: Combinație GAN + LSTM (Varianta pentru Viitorul Audit)
+Dacă vrei o arhitectură de top care să fie capabilă de un audit detaliat, poți folosi straturile convoluționale dintr-un Discriminator GAN ca să extragi caracteristici foarte fine din imagini, iar ieșirea lor să o legi de o rețea LSTM. Aceasta este o combinație rară dar extrem de puternică, deoarece Discriminatorul excelează la detecția modificărilor la nivel de pixel (anomalii spațiale), iar LSTM-ul prinde inconsistența dinamică (anomalii temporale).
+
+Cum te ajută aceste modele să generezi Raportul de Audit?
+Pentru a implementa funcționalitatea prin care sistemul îți va spune "unde" este deepfake-ul, în momentul în care ai terminat faza de testare și ai ales cel mai bun model, vei folosi o tehnică de ferestre glisante (Sliding Window):
+
+Pentru CNN simplu sau GAN Detector: Când încarci un video nou la testare, rulezi modelul cadru cu cadru. Salvezi rezultatele într-o listă. La final, poți genera un grafic care arată cronologic (de la secunda 0 la final): pe ce secunde linia trece de pragul de 50% Fake.
+
+Pentru CNN + LSTM: În loc să trimiți 25 de cadre din tot videoclipul o singură dată, trimiți pachete de câte 10-25 de cadre consecutive (de exemplu: cadrele 1-25, apoi cadrele 10-35, cadrele 20-45). Dacă pachetul de cadre de la secunda 3 până la secunda 4 returnează 1 (Fake), știi exact intervalul de timp compromis pe care să îl treci în raportul de audit.
+
+Vizualizarea comparativă în TensorBoard
+După ce ai rulat antrenările pentru scripturile tale, deschide terminalul în directorul proiectului tău și rulează:
+
+Bash
+tensorboard --logdir=logs/fit/
+Intră în browser pe http://localhost:6006. TensorBoard va recunoaște automat folderele (cnn_pure, cnn_lstm, gan_discriminator) și îți va suprapune graficele de Loss (Pierdere) și Accuracy (Acuratețe) pentru setul de validare (acele 20% din date stabilite de scriptul tău).
+
+Ce trebuie să urmărești pe grafice pentru a alege cea mai bună variantă:
+
+Alege modelul care obține cea mai mare acuratețe stabilă pe setul de validare.
+
+Fii atent la Overfitting: dacă curba de acuratețe pe setul de antrenare continuă să crească spre 99%, dar curba de validare începe să scadă, înseamnă că rețeaua doar a memorat setul tău Celeb-DF și nu va fi bună la un audit pe un video complet nou de pe internet. Modelul care menține cele două curbe apropiate este cel câștigător.
+
+poti sa imi faci pt toate si sa imi spui cum va trebui sa utilizez datasetul care va fi ca aici ca structura https://github.com/TRahulsingh/DeepfakeDetector sau fisierele le gasesti si aici: https://github.com/andreeaCringasu2004/Comparare_ReteleNeuronale si sa preia imaginile so tot ce e neoie ca vor fi separate pe train si validation iar fiecare in fake si real si sa pot sa imi dai exacto codul in continuarea adica dupa partea asta Option 2: Use Dataset Preparation Tools
+
+
+
+Use our built-in tools to prepare datasets. Edit the source/destination paths inside each script before running:
+
+# Extract frames from videos (every 15th frame) and split into train/val# Edit source & dest paths in the script, then run:
+
+python tools/split_video_dataset.py# Split an existing image dataset into 80/20 train/validation# Edit source_dataset & destination paths in the script, then run:
+
+python tools/split_train_val.py# Extract frames from a single video directory# Edit video_dir & output_dir in the script, then run:
+
+python tools/split_dataset.py mentionez ca initial totul este in raw unde se gasesc in folderele fake si real si dupa ajung ca in structura spusa, dar doar imagini
+
+Aici ai codul complet și structurat pentru toate cele 4 variante de rețele neuronale (CNN, LSTM/CNN-LSTM, GAN Discriminator, plus o combinație bonus de GAN + LSTM), care continuă exact de la secțiunea din Git / scripturile tale, pregătite pentru monitorizarea cu TensorBoard.
+
+Cum va trebui să utilizezi datasetul (Structura și Împărțirea)
+Conform indicațiilor tale, procesul tău de date se desfășoară în felul următor:
+
+Faza Inițială: Toate videoclipurile brute .mp4 se află în directorul videos/[Celeb-DF-sau-v2]/raw/real/ și videos/[Celeb-DF-sau-v2]/raw/fake/.
+
+Procesarea / Extragerea cadrelor: Rulezi scriptul de extragere a cadrelor (ex: python tools/split_video_dataset.py sau logica din notebook). Acesta va salva doar imagini (cadre extrase) direct în directoarele finale.
+
+Structura Finală de Imagini:
+
+Plaintext
+dataset_imagini /
+    ├── train /
+    │     ├── real /  <-- (Imagini/Cadre din clipuri reale - 80%)
+    │     └── fake /  <-- (Imagini/Cadre din clipuri deepfake - 80%)
+    └── validation /
+          ├── real /  <-- (Imagini/Cadre din clipuri reale - 20%)
+          └── fake /  <-- (Imagini/Cadre din clipuri deepfake - 20%)
+CODUL COMPLET PENTRU CELE 4 REȚELE (Continuare Script)
+Adaugă acest cod în scriptul sau notebook-ul tău, imediat după pașii de pregătire a datasetului. Înainte de a rula codul, asigură-te că modifici variabila DATASET_PATH cu calea reală către folderul tău de imagini.
+
+Python
+import os
+import datetime
+import numpy as np
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import (Conv2D, MaxPooling2D, Flatten, Dense, 
+                                     Dropout, TimeDistributed, LSTM, LeakyReLU, Reshape)
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+
+# ==============================================================================
+# 0. CONFIGURARE ȘI ÎNCĂRCARE DATE (Generatoare Automate)
+# ==============================================================================
+# Schimbă această cale cu folderul tău care conține 'train' și 'validation'
+DATASET_PATH = "cale_catre_dataset_imagini/" 
+
+TRAIN_DIR = os.path.join(DATASET_PATH, 'train')
+VAL_DIR = os.path.join(DATASET_PATH, 'validation')
+
+IMG_SHAPE = (224, 224, 3)
+BATCH_SIZE_FRAME = 32 # Pentru CNN și GAN (cadru cu cadru)
+BATCH_SIZE_SEQ = 8    # Pentru LSTM (pachete de secvențe video)
+EPOCHS = 10
+
+# Generatoare standard de imagini (Normalizează pixelii între 0 și 1)
+train_datagen = ImageDataGenerator(rescale=1./255)
+val_datagen = ImageDataGenerator(rescale=1./255)
+
+# Încărcarea datelor Frame-by-Frame (Folosit pentru Rețeaua 1 și Rețeaua 3)
+train_generator_frame = train_datagen.flow_from_directory(
+    TRAIN_DIR, target_size=(224, 224), batch_size=BATCH_SIZE_FRAME, class_mode='binary'
+)
+val_generator_frame = val_datagen.flow_from_directory(
+    VAL_DIR, target_size=(224, 224), batch_size=BATCH_SIZE_FRAME, class_mode='binary'
+)
+
+print("Generatoarele de date au fost configurate cu succes.")
+
+# ==============================================================================
+# REȚEAUA 1: CNN PUR (Clasificare Frame-by-Frame)
+# Tratează fiecare imagine independent. Bună pentru a detecta detalii statice false.
+# ==============================================================================
+print("\n--- Inițializare Rețeaua 1: CNN Pur ---")
+
+model_cnn = Sequential([
+    Conv2D(32, (3, 3), activation="relu", input_shape=IMG_SHAPE),
+    MaxPooling2D((2, 2)),
+    Conv2D(64, (3, 3), activation="relu"),
+    MaxPooling2D((2, 2)),
+    Conv2D(128, (3, 3), activation="relu"),
+    MaxPooling2D((2, 2)),
+    Flatten(),
+    Dense(128, activation="relu"),
+    Dropout(0.5), 
+    Dense(1, activation="sigmoid") # 0 = Real, 1 = Fake
+])
+
+model_cnn.compile(optimizer="adam", loss="binary_crossentropy", metrics=["accuracy"])
+
+log_dir_cnn = "logs/fit/1_cnn_pure_" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+tb_cnn = tf.keras.callbacks.TensorBoard(log_dir=log_dir_cnn, histogram_freq=1)
+
+# Antrenare CNN
+# model_cnn.fit(train_generator_frame, validation_data=val_generator_frame, epochs=EPOCHS, callbacks=[tb_cnn])
+
+
+# ==============================================================================
+# REȚEAUA 2: CNN + LSTM (Analiză Secvențială / Video)
+# Analizează 25 de cadre consecutive pentru a vedea dacă mișcarea este naturală.
+# ==============================================================================
+print("\n--- Inițializare Rețeaua 2: CNN + LSTM ---")
+
+# Structură TimeDistributed: extrage trăsături din fiecare cadru, apoi le trimite la LSTM
+model_cnn_lstm = Sequential([
+    # Inputul are forma: (Batch, 25 de cadre, 224 inaltime, 224 latime, 3 canale)
+    TimeDistributed(Conv2D(32, (3, 3), activation="relu"), input_shape=(25, 224, 224, 3)),
+    TimeDistributed(MaxPooling2D((2, 2))),
+    TimeDistributed(Conv2D(64, (3, 3), activation="relu")),
+    TimeDistributed(MaxPooling2D((2, 2))),
+    TimeDistributed(Flatten()),
+    
+    # Stratul LSTM analizează tranziția temporală dintre cele 25 de cadre
+    LSTM(64, return_sequences=False), 
+    
+    Dense(64, activation="relu"),
+    Dropout(0.5),
+    Dense(1, activation="sigmoid")
+])
+
+model_cnn_lstm.compile(optimizer="adam", loss="binary_crossentropy", metrics=["accuracy"])
+
+log_dir_lstm = "logs/fit/2_cnn_lstm_" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+tb_lstm = tf.keras.callbacks.TensorBoard(log_dir=log_dir_lstm, histogram_freq=1)
+
+# NOTĂ: Pentru antrenarea LSTM aveți nevoie ca imaginile să fie grupate în pachete de câte 25 (secvențe). 
+# Puteți face asta transformând array-urile NumPy extrase din scriptul Jupyter în dataset de tip: 
+# model_cnn_lstm.fit(X_train_sequences, y_train_sequences, validation_data=(X_val_seq, y_val_seq), epochs=EPOCHS, callbacks=[tb_lstm])
+
+
+# ==============================================================================
+# REȚEAUA 3: GAN DISCRIMINATOR (Detector pe bază de Anomalii de Pixel)
+# Folosește o arhitectură nativă de Discriminator GAN, excelentă la prinderea micro-artefactelor de AI.
+# ==============================================================================
+print("\n--- Inițializare Rețeaua 3: GAN Discriminator ---")
+
+model_gan_detector = Sequential([
+    # Straturi specifice GAN (folosesc Strides în loc de MaxPool și LeakyReLU)
+    Conv2D(64, (5, 5), strides=(2, 2), padding="same", input_shape=IMG_SHAPE),
+    LeakyReLU(alpha=0.2),
+    Dropout(0.3),
+    
+    Conv2D(128, (5, 5), strides=(2, 2), padding="same"),
+    LeakyReLU(alpha=0.2),
+    Dropout(0.3),
+    
+    Conv2D(256, (5, 5), strides=(2, 2), padding="same"),
+    LeakyReLU(alpha=0.2),
+    Dropout(0.3),
+    
+    Flatten(),
+    Dense(1, activation="sigmoid")
+])
+
+# Discriminatoarele GAN funcționează optim cu o rată de învățare mai mică și Adam modificat (beta_1)
+opt_gan = tf.keras.optimizers.Adam(learning_rate=0.0002, beta_1=0.5)
+model_gan_detector.compile(optimizer=opt_gan, loss="binary_crossentropy", metrics=["accuracy"])
+
+log_dir_gan = "logs/fit/3_gan_discriminator_" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+tb_gan = tf.keras.callbacks.TensorBoard(log_dir=log_dir_gan, histogram_freq=1)
+
+# Antrenare GAN Detector
+# model_gan_detector.fit(train_generator_frame, validation_data=val_generator_frame, epochs=EPOCHS, callbacks=[tb_gan])
+
+
+# ==============================================================================
+# REȚEAUA 4 (COMBINAȚIE ADĂUGATĂ): GAN DISCRIMINATOR + LSTM
+# Cea mai robustă variantă pentru Audit: straturile GAN prind falsul din pixeli, LSTM prinde erorile video.
+# ==============================================================================
+print("\n--- Inițializare Rețeaua 4: GAN + LSTM ---")
+
+model_gan_lstm = Sequential([
+    # Aplicăm straturile discriminatorului GAN pe fiecare cadru din cele 25
+    TimeDistributed(Conv2D(32, (5, 5), strides=(2, 2), padding="same"), input_shape=(25, 224, 224, 3)),
+    TimeDistributed(LeakyReLU(alpha=0.2)),
+    TimeDistributed(Conv2D(64, (5, 5), strides=(2, 2), padding="same")),
+    TimeDistributed(LeakyReLU(alpha=0.2)),
+    TimeDistributed(Flatten()),
+    
+    # Secvența procesată de GAN intră în memoria temporală LSTM
+    LSTM(64, return_sequences=False),
+    
+    Dense(32, activation="relu"),
+    Dropout(0.4),
+    Dense(1, activation="sigmoid")
+])
+
+model_gan_lstm.compile(optimizer=tf.keras.optimizers.Adam(learning_rate=0.0002), loss="binary_crossentropy", metrics=["accuracy"])
+
+log_dir_gan_lstm = "logs/fit/4_gan_lstm_hybrid_" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+tb_gan_lstm = tf.keras.callbacks.TensorBoard(log_dir=log_dir_gan_lstm, histogram_freq=1)
+
+print("\nToate cele 4 modele au fost definite și sunt gata pentru rulare/comparare!")
+Ghid de Utilizare și Vizualizare în TensorBoard
+Pentru a porni procesul de comparare și a genera graficele dorite, urmează acești pași simpli în terminalul tău (în mediul virtual unde rulează proiectul):
+
+Rulează antrenările (scoate # din fața liniilor model.fit(...) din script pentru modelele pe care vrei să le testezi).
+
+Pe măsură ce rețelele se antrenează, ele vor crea automat un folder numit logs/ în directorul proiectului tău.
+
+Deschide o consolă nouă (Terminal/Anaconda Prompt) în folderul principal al proiectului și rulează:
+
+Bash
+tensorboard --logdir=logs/fit/
+Deschide browserul la adresa indicată în consolă: http://localhost:6006/.
+
+Cum interpretezi datele pentru viitorul Raport de Audit:
+
+În secțiunea Scalars din TensorBoard vei vedea graficele de Accuracy și Loss suprapuse.
+
+Pentru varianta de detecție cadru cu cadru (CNN simplu și GAN), vei putea genera rapoarte cu localizarea exactă a falsului pe secunde în video-ul final.
+
+Pentru variantele temporale (CNN-LSTM și GAN-LSTM), acestea îți vor oferi cea mai stabilă decizie finală, eliminând alarmele false (precum cadrele în care persoana nu se mișcă sau lumina se schimbă brusc).
+
+poti sa imi adaugi si un GANs complet (cu ambele parti) te rog si alte combinatii + un LSTM pur?
+
+Pentru a avea un tablou complet al tuturor experimentelor posibile și pentru a determina cu exactitate prin TensorBoard ce funcționează mai bine, am extins arhitecturile.
+
+Mai jos găsești codul complet pentru:
+
+Un GAN Complet (Generator + Discriminator) antrenat printr-o buclă custom (tf.GradientTape) care salvează metricile ambelor componente în TensorBoard.
+
+Un LSTM Pur (care primește direct vectori de caracteristici sau imagini aplatizate de-a lungul timpului).
+
+O altă combinație puternică: CNN Preantrenat (MobileNetV2) + LSTM, utilă deoarece modelele antrenate de la zero pe seturi mici pot face overfitting ușor, în timp ce un model preantrenat pe milioane de imagini oferă caracteristici spațiale mult mai robuste.
+
+Cum organizăm datele pentru Secvențe (LSTM Pur și Combinații)
+Spre deosebire de CNN-ul simplu unde imaginile sunt luate una câte una, rețelele de tip LSTM au nevoie de o dimensiune temporală. Dacă scriptul tău extrage câte 25 de cadre din fiecare video, datele tale finale de antrenare trebuie să fie grupate ca un tensor de forma:
+[Număr_Videoclipuri, 25, Rezoluție, Rezoluție, Canale].
+
+CODUL EXTINS PENTRU TOATE VARIANTELE ȘI COMBINAȚIILE
+Adaugă acest cod în scriptul tău pentru a completa setul de teste:
+
+Python
+import os
+import datetime
+import numpy as np
+import tensorflow as tf
+from tensorflow.keras.models import Sequential, Model
+from tensorflow.keras.layers import (Conv2D, MaxPooling2D, Flatten, Dense, 
+                                     Dropout, TimeDistributed, LSTM, LeakyReLU, Reshape, Conv2DTranspose, Input)
+
+# Configurări globale din scriptul tău
+IMG_SHAPE = (224, 224, 3)
+STEPS_PER_VIDEO = 25 # Numărul de cadre extrase per video
+
+# ==============================================================================
+# 1. GAN COMPLET (Generator + Discriminator)
+# În timp ce Generatorul învață să creeze fețe deepfake artificiale, 
+# Discriminatorul devine din ce în ce mai bun la detecția lor.
+# ==============================================================================
+print("\n--- Inițializare GAN Complet ---")
+
+def build_generator():
+    # Primește un vector de zgomot aleatoriu de dimensiune 100 și generează o imagine 224x224x3
+    model = Sequential([
+        Dense(7 * 7 * 256, input_dim=100),
+        LeakyReLU(alpha=0.2),
+        Reshape((7, 7, 256)),
+        
+        # Upsampling treptat până la 224x224
+        Conv2DTranspose(128, (4,4), strides=(2,2), padding='same'), # 14x14
+        LeakyReLU(alpha=0.2),
+        
+        Conv2DTranspose(64, (4,4), strides=(2,2), padding='same'),  # 28x28
+        LeakyReLU(alpha=0.2),
+        
+        Conv2DTranspose(32, (4,4), strides=(2,2), padding='same'),  # 56x56
+        LeakyReLU(alpha=0.2),
+        
+        Conv2DTranspose(16, (4,4), strides=(2,2), padding='same'),  # 112x112
+        LeakyReLU(alpha=0.2),
+        
+        Conv2DTranspose(3, (4,4), strides=(2,2), padding='same', activation='tanh') # 224x224x3
+    ], name="Generator")
+    return model
+
+def build_discriminator():
+    # Discriminatorul este detectorul tău de deepfake la nivel de cadru
+    model = Sequential([
+        Conv2D(64, (3,3), strides=(2,2), padding="same", input_shape=IMG_SHAPE),
+        LeakyReLU(alpha=0.2),
+        Dropout(0.3),
+        
+        Conv2D(128, (3,3), strides=(2,2), padding="same"),
+        LeakyReLU(alpha=0.2),
+        Dropout(0.3),
+        
+        Flatten(),
+        Dense(1, activation="sigmoid") # 1 = Real, 0 = Fake (Generat/Deepfake)
+    ], name="Discriminator")
+    return model
+
+generator = build_generator()
+discriminator = build_discriminator()
+
+# Configurare Log-uri TensorBoard pentru bucla custom de GAN
+gan_log_dir = "logs/fit/gan_complete_" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+summary_writer = tf.summary.create_file_writer(gan_log_dir)
+
+# Optimizatori și Loss pentru GAN
+cross_entropy = tf.keras.losses.BinaryCrossentropy()
+generator_optimizer = tf.keras.optimizers.Adam(1e-4)
+discriminator_optimizer = tf.keras.optimizers.Adam(1e-4)
+
+@tf.function
+def train_gan_step(real_images):
+    noise = tf.random.normal([real_images.shape[0], 100])
+
+    with tf.GradientTape() as gen_tape, tf.GradientTape() as disc_tape:
+        generated_images = generator(noise, training=True)
+
+        real_output = discriminator(real_images, training=True)
+        fake_output = discriminator(generated_images, training=True)
+
+        # Calcul pierderi (Loss)
+        disc_loss_real = cross_entropy(tf.ones_like(real_output), real_output)
+        disc_loss_fake = cross_entropy(tf.zeros_like(fake_output), fake_output)
+        disc_loss = disc_loss_real + disc_loss_fake
+        
+        gen_loss = cross_entropy(tf.ones_like(fake_output), fake_output)
+
+    # Aplicare gradienți
+    gradients_of_generator = gen_tape.gradient(gen_loss, generator.trainable_variables)
+    gradients_of_discriminator = disc_tape.gradient(disc_loss, discriminator.trainable_variables)
+
+    generator_optimizer.apply_gradients(zip(gradients_of_generator, generator.trainable_variables))
+    discriminator_optimizer.apply_gradients(zip(gradients_of_discriminator, discriminator.trainable_variables))
+    
+    return gen_loss, disc_loss
+
+# Exemplu apelare în buclă (va trebui integrat cu generatorul tău de date brute din imagini reale):
+# for epoch in range(EPOCHS):
+#     for image_batch, _ in train_generator_frame:
+#         g_loss, d_loss = train_gan_step(image_batch)
+#     with summary_writer.as_default():
+#         tf.summary.scalar('gen_loss', g_loss, step=epoch)
+#         tf.summary.scalar('disc_loss', d_loss, step=epoch)
+
+
+# ==============================================================================
+# 2. LSTM PUR (Fără straturi Convoluționale intermediare)
+# Tratează imaginile direct ca vectori mari de pixeli aplatizați de-a lungul timpului.
+# ==============================================================================
+print("\n--- Inițializare LSTM Pur ---")
+
+model_lstm_pure = Sequential([
+    # Inputul: 25 de cadre, fiecare cadru este aplatizat complet (224 * 224 * 3 = 150528 pixeli)
+    # Notă: Această rețea consumă multă memorie RAM/VRAM din cauza dimensiunii mari a inputului direct
+    Input(shape=(STEPS_PER_VIDEO, 224 * 224 * 3)),
+    
+    LSTM(128, return_sequences=True),
+    Dropout(0.3),
+    LSTM(64, return_sequences=False),
+    Dropout(0.3),
+    
+    Dense(64, activation="relu"),
+    Dense(1, activation="sigmoid")
+])
+
+model_lstm_pure.compile(optimizer="adam", loss="binary_crossentropy", metrics=["accuracy"])
+
+log_dir_lstm_pure = "logs/fit/lstm_pure_" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+tb_lstm_pure = tf.keras.callbacks.TensorBoard(log_dir=log_dir_lstm_pure, histogram_freq=1)
+
+
+# ==============================================================================
+# 3. COMBINAȚIE AVANSATĂ: CNN Preantrenat (MobileNetV2) + LSTM
+# În loc să antrenăm un CNN de la zero (care poate fi slab), folosim MobileNetV2 
+# (blocat) ca extractor de caracteristici, iar LSTM-ul învață doar tranzițiile video.
+# ==============================================================================
+print("\n--- Inițializare Combinație MobileNetV2 + LSTM ---")
+
+# Încărcăm MobileNetV2 fără partea de clasificare finală
+base_cnn = tf.keras.applications.MobileNetV2(input_shape=IMG_SHAPE, include_top=False, weights="imagenet")
+base_cnn.trainable = False # Înghețăm straturile pentru a nu distruge greutățile preantrenate
+
+model_pretrained_lstm = Sequential([
+    # Rulăm MobileNetV2 pe fiecare din cele 25 de cadre
+    TimeDistributed(base_cnn, input_shape=(STEPS_PER_VIDEO, 224, 224, 3)),
+    TimeDistributed(Flatten()),
+    
+    # Trimitem vectorii rezultați direct în structura temporală
+    LSTM(128, return_sequences=False),
+    
+    Dense(64, activation="relu"),
+    Dropout(0.5),
+    Dense(1, activation="sigmoid")
+])
+
+model_pretrained_lstm.compile(optimizer="adam", loss="binary_crossentropy", metrics=["accuracy"])
+
+log_dir_pretrained = "logs/fit/pretrained_cnn_lstm_" + datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+tb_pretrained = tf.keras.callbacks.TensorBoard(log_dir=log_dir_pretrained, histogram_freq=1)
+
+print("\nToate arhitecturile suplimentare au fost încărcate în script!")
+La ce să te aștepți la compararea din TensorBoard?
+Când vei deschide TensorBoard (tensorboard --logdir=logs/fit/) și vei compara graficele acestor noi modele cu cele anterioare, vei observa câteva aspecte teoretice importante pentru raportul tău:
+
+LSTM Pur vs CNN+LSTM: Cel mai probabil, LSTM-ul Pur va avea performanțe mai slabe sau va fi foarte greu de antrenat. Deoarece nu are straturi convoluționale (rețelele Conv2D) care să înțeleagă structura spațială a feței (ochi, nas, gură), el vede doar o matrice uriașă de pixeli care se schimbă, pierzând contextul vizual.
+
+MobileNetV2 + LSTM: Această combinație hibridă are șanse mari să fie câștigătoarea testelor tale. Folosind un extractor de imagini deja antrenat pe milioane de poze, rețeaua va ști din start cum arată o față umană corectă, iar memoria LSTM se va concentra exclusiv pe detectarea anomaliilor de clipit, mișcări bruște sau deformări de textură specifice deepfake-urilor de pe Celeb-DF.
+
+GAN Complet: În TensorBoard vei vedea două curbe opuse (Loss-ul Generatorului și Loss-ul Discriminatorului). Scopul tău nu este ca Generatorul să devină perfect, ci să folosești Discriminatorul rezultat din această luptă ca un detector extrem de fin pentru imaginile statice dubioase.
+
+
+
+
+Gemini este un AI și poate să facă greșeli, inclusiv în legătură cu persoane. Confidențialitatea ta și GeminiSe deschide într-o fereastră nouă
+
