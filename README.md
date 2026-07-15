@@ -12,3 +12,6 @@
  
   -> https://drive.google.com/file/d/1iLx76wsbi9itnkxSqz9BVBl4ZvnbIazj/view  -> https://drive.usercontent.google.com/download?id=1iLx76wsbi9itnkxSqz9BVBl4ZvnbIazj&export=download
   
+## link pt ce am mai transferat:
+
+https://we.tl/t-mjngLXBH50vHN69x
