@@ -1,3 +1,7 @@
 videos/
 videos_dataset.tar.gz
 lightning_logs/
+__pycache__/
+*.pth
+*.json
+*.pyc
