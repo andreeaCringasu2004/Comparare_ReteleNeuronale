@@ -1,0 +1,1155 @@
+Detalii despre ce am facut pe 14.07.2026
+
+Foarte bine, acum ai ajuns la partea unde trebuie să alegi cum organizezi codul. Ai două variante:
+
+Folosești temporar proiectul de pe GitHub ca să vezi cum este făcut un detector complet.
+Îți construiești propriul proiect, mai curat pentru comparația CNN vs LSTM vs GAN discriminator.
+
+Eu aș face ambele: studiem acel repository, dar pentru lucrarea ta aș păstra o structură proprie.
+
+1. Ce ai făcut tu în notebook acum
+
+Codul tău:
+
+model = Sequential([
+    Conv2D(32,(3,3),activation="relu",input_shape=(224,224,3)),
+    MaxPooling2D(),
+    Conv2D(64,(3,3),activation="relu"),
+    MaxPooling2D(),
+    Flatten(),
+    Dense(128, activation="relu"),
+    Dropout(0.5), 
+    Dense(1, activation="sigmoid")
+])
+
+
+model.compile(
+    optimizer="adam",
+    loss="binary_crossentropy",
+    metrics=["accuracy"]
+)
+
+
+prediction = model.predict(cadre)
+
+video_prediction = np.mean(prediction)
+
+print(video_prediction)
+
+Acesta este momentan:
+
+arhitectura CNN ✅
+compilarea modelului ✅
+predicția pe cadre ✅
+
+Dar lipsește:
+
+încărcarea datasetului
+antrenarea (model.fit)
+salvarea modelului
+evaluarea pe videoclipuri noi
+
+Practic ai construit motorul, dar încă nu ai făcut partea de învățare.
+
+2. Ce ar trebui să conțină model.py
+
+Acest fișier ar conține doar rețeaua.
+
+Exemplu:
+
+deepfake_project/
+
+model.py
+
+conține:
+
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import (
+    Conv2D,
+    MaxPooling2D,
+    Flatten,
+    Dense,
+    Dropout
+)
+
+
+def create_cnn():
+
+    model = Sequential([
+
+        Conv2D(
+            32,
+            (3,3),
+            activation="relu",
+            input_shape=(224,224,3)
+        ),
+
+        MaxPooling2D(),
+
+        Conv2D(
+            64,
+            (3,3),
+            activation="relu"
+        ),
+
+        MaxPooling2D(),
+
+        Flatten(),
+
+        Dense(
+            128,
+            activation="relu"
+        ),
+
+        Dropout(0.5),
+
+        Dense(
+            1,
+            activation="sigmoid"
+        )
+    ])
+
+
+    model.compile(
+        optimizer="adam",
+        loss="binary_crossentropy",
+        metrics=["accuracy"]
+    )
+
+
+    return model
+
+Avantaj:
+
+În alt fișier scrii:
+
+from model import create_cnn
+
+model = create_cnn()
+
+și nu repeți arhitectura.
+
+3. Ce ar trebui să conțină train.py
+
+Acesta face antrenarea:
+
+train.py
+
+Exemplu simplificat:
+
+from model import create_cnn
+
+
+model = create_cnn()
+
+
+model.fit(
+    X_train,
+    y_train,
+    epochs=10,
+    batch_size=16,
+    validation_data=(
+        X_val,
+        y_val
+    )
+)
+
+
+model.save(
+    "cnn_deepfake.keras"
+)
+
+La final ai:
+
+cnn_deepfake.keras
+
+Acesta este modelul antrenat.
+
+4. Ce ar trebui să conțină test.py
+
+Acesta NU mai antrenează.
+
+El:
+
+încarcă modelul;
+citește videoclipuri;
+extrage cadre;
+face predicția.
+
+Exemplu:
+
+import tensorflow as tf
+import numpy as np
+
+
+model = tf.keras.models.load_model(
+    "cnn_deepfake.keras"
+)
+
+
+frames = extract_frames(
+    "video_test.mp4"
+)
+
+
+frames = frames / 255.0
+
+
+prediction = model.predict(frames)
+
+
+score = np.mean(prediction)
+
+
+print("Scor:", score)
+
+
+if score > 0.5:
+    print("FAKE")
+else:
+    print("REAL")
+5. Despre repository-ul GitHub menționat
+
+Poți să îl testezi, dar fii atent:
+
+Un proiect GitHub poate avea:
+
+alt dataset;
+alt format de input;
+altă arhitectură;
+cod scris pentru alte versiuni TensorFlow.
+
+Nu presupune automat că dacă rulează acolo este optim pentru Celeb-DF.
+
+Pentru învățare este foarte bun.
+
+Pentru comparația ta:
+
+CNN
+LSTM
+GAN discriminator
+
+aș păstra un cod comun de:
+
+încărcare date;
+extragere cadre;
+evaluare;
+
+și schimbăm doar modelul.
+
+6. Ce aș face acum pe serverul GPU
+
+Nu aș începe încă cu tot GitHub-ul.
+
+Aș face:
+
+deepfake_project/
+
+├── data/
+│   ├── train/
+│   └── validation/
+│
+├── model.py
+│
+├── train.py
+│
+├── test.py
+│
+└── results/
+
+Și primul obiectiv:
+
+Obținem:
+
+CNN accuracy = X%
+
+pe Celeb-DF.
+
+După aceea:
+
+copiem aceeași structură:
+
+model_lstm.py
+train_lstm.py
+test_lstm.py
+
+și:
+
+model_gan.py
+train_gan.py
+test_gan.py
+
+Un pas următor util ar fi să verificăm repository-ul GitHub pe care l-ai găsit și să vedem:
+
+ce model folosește;
+dacă este CNN, LSTM sau altceva;
+ce format de dataset așteaptă.
+
+Apoi putem decide dacă îl adaptăm la Celeb-DF sau pornim de la codul tău.
+
+vreau ca model si trai sa fie int-unul singur, iar test separat, se poate?   ca eu pana acum am asta:  import tensorflow as tf
+import numpy as np
+import cv2
+import os
+import matplotlib.pyplot as plt
+
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Dropout                       def extragere_cadre(video_path, nr_cadre=25):
+
+    cap = cv2.VideoCapture(video_path)
+    total_cadre = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    cadre = []
+    indexi = np.linspace(0, total_cadre-1, nr_cadre).astype(int)
+
+    for index in indexi:
+        cap.set(cv2.CAP_PROP_POS_FRAMES, index)
+        ret, cadru = cap.read()
+        if ret:
+            cadru = cv2.cvtColor(cadru, cv2.COLOR_BGR2RGB)
+            cadru = cv2.resize(cadru, (224,224))
+            cadre.append(cadru)
+            
+    cap.release()
+    return np.array(cadre)               video_path = r"C:\Users\andra\Downloads\Celeb-DF\YouTube-real\00248.mp4"
+cadre = extragere_cadre(video_path)
+print(cadre.shape)                          plt.figure(figsize=(15,10))
+
+for i in range(len(cadre)):
+    plt.subplot(5,5,i+1)
+    plt.imshow(cadre[i])
+    plt.title(f"Cadre {i+1}")
+    plt.axis("off")
+
+
+plt.tight_layout()
+plt.show()
+
+print(cadre.shape)                      ## Model CNN
+
+model = Sequential([
+    Conv2D(32,(3,3),activation="relu",input_shape=(224,224,3)),
+    MaxPooling2D(),
+    Conv2D(64,(3,3),activation="relu"),
+    MaxPooling2D(),
+    Flatten(),
+    Dense(128, activation="relu"),
+    Dropout(0.5), 
+    Dense(1, activation="sigmoid")
+])
+
+
+model.compile(optimizer="adam", loss="binary_crossentropy", metrics=["accuracy"])
+model.summary()
+
+prediction = model.predict(cadre)
+
+video_prediction = np.mean(prediction)
+
+print(video_prediction)                          dar in loc de un fisier va fi nevoie de tot datasetul si dupa fisierul si setul de date sa le uploadez in (deepfake_env) practica@ubuntu63:~$
+
+Da, chiar așa aș face și eu pentru proiectul tău. Este mai simplu și mai ușor de urmărit.
+
+În loc de 3 fișiere (model.py, train.py, test.py), poți avea doar:
+
+cnn_train.py
+cnn_test.py
+
+sau chiar:
+
+CNN_train.ipynb
+CNN_test.ipynb
+
+pentru început.
+
+Eu aș organiza proiectul așa
+deepfake_project/
+
+│
+├── cnn_train.py      <- construiește modelul + antrenează + salvează
+│
+├── cnn_test.py       <- încarcă modelul și testează videoclipurile
+│
+├── data/
+│      |
+│      ├── train/
+│      │      |
+│      │      ├── real/
+│      │      └── fake/
+│      │
+│      └── validation/
+│              |
+│              ├── video001.mp4
+│              ├── video002.mp4
+│              └── ...
+│
+└── saved_models/
+        cnn.keras
+
+Mi se pare mult mai potrivit pentru lucrarea ta.
+
+Ce va conține cnn_train.py
+
+Acesta va face TOT.
+
+1
+
+Importuri
+
+import tensorflow as tf
+...
+2
+
+Funcția ta:
+
+def extragere_cadre(...):
+
+rămâne exact aceeași.
+
+3
+
+Citește TOT datasetul.
+
+Nu doar:
+
+video_path="..."
+
+ci:
+
+train/
+
+real/
+
+video1.mp4
+
+video2.mp4
+
+...
+
+fake/
+
+video1.mp4
+
+video2.mp4
+
+și face automat
+
+X
+
+y
+4
+
+Construiește CNN-ul.
+
+Exact codul tău.
+
+5
+
+Face
+
+model.fit(...)
+6
+
+Salvează
+
+model.save(
+    "saved_models/cnn.keras"
+)
+cnn_test.py
+
+Acesta va fi foarte mic.
+
+Face doar:
+
+încarcă modelul
+
+↓
+
+citește videoclipurile din validation
+
+↓
+
+extrage 25 cadre
+
+↓
+
+predict
+
+↓
+
+afișează
+
+REAL / FAKE
+
+↓
+
+Accuracy
+Ce trebuie schimbat în codul tău
+
+Momentan ai:
+
+video_path = ...
+
+Asta merge doar pentru un video.
+
+Va trebui înlocuit cu ceva de genul:
+
+for fiecare_video in train_real:
+
+    cadre = extragere_cadre(fiecare_video)
+
+    ...
+
+și apoi
+
+for fiecare_video in train_fake:
+
+    cadre = extragere_cadre(fiecare_video)
+
+    ...
+
+adică automat pentru tot datasetul.
+
+Vei avea
+YouTube-real/
+
+001.mp4
+
+002.mp4
+
+...
+
+Celeb-synthesis/
+
+001.mp4
+
+002.mp4
+
+și programul le citește singur.
+
+Eu aș modifica și partea aceasta
+
+Momentan faci
+
+prediction = model.predict(cadre)
+
+dar modelul NU este antrenat.
+
+În cnn_train.py va fi
+
+X=[]
+
+y=[]
+
+apoi
+
+history=model.fit(...)
+
+abia apoi
+
+model.save(...)
+
+În cnn_test.py
+
+vei avea
+
+model=tf.keras.models.load_model(
+    "saved_models/cnn.keras"
+)
+
+și apoi
+
+prediction=model.predict(cadre)
+
+care acum va avea sens.
+
+Cum ajung fișierele pe server
+
+Presupunând că pe Windows ai
+
+Deepfake_Project/
+
+cnn_train.py
+
+cnn_test.py
+
+data/
+
+le copiezi pe server.
+
+De exemplu cu scp:
+
+scp -r Deepfake_Project practica@ubuntu63:~
+
+Asta îți creează pe server:
+
+/home/practica/Deepfake_Project
+
+Apoi:
+
+cd Deepfake_Project
+
+activezi mediul:
+
+conda activate deepfake_env
+
+sau dacă este deja activ:
+
+(deepfake_env)
+
+și rulezi:
+
+python cnn_train.py
+
+după ce termină:
+
+python cnn_test.py
+Eu aș mai face o modificare importantă
+
+În loc să încarci tot datasetul în memorie (RAM), ceea ce poate fi foarte costisitor pe Celeb-DF, aș folosi un generator de date (tf.keras.utils.Sequence sau tf.data.Dataset).
+
+Avantaje:
+
+citește videoclipurile pe rând;
+consumă mult mai puțină memorie;
+este soluția folosită în practică pentru seturi mari de date.
+
+Pentru Celeb-DF este o alegere mult mai bună decât să construiești un singur X imens cu toate cadrele.
+
+Eu aș merge pe această variantă, pentru că va funcționa și pe serverul GPU și va putea scala la întregul dataset fără să încerce să încarce toate videoclipurile simultan.
+
+sau se poate intr-un singur fisier.py?
+
+Da, se poate foarte bine într-un singur fișier .py. Pentru etapa în care ești acum chiar poate fi mai ușor: ai un singur script pe care îl urci pe server, îl rulezi în deepfake_env, iar el face tot fluxul:
+
+încarcă dataset-ul de antrenare;
+extrage cadre din videoclipuri;
+construiește CNN-ul;
+antrenează modelul;
+salvează modelul;
+testează pe videoclipurile de validare;
+afișează rezultatele.
+
+Structura ar putea fi:
+
+Deepfake_Project/
+
+│
+├── deepfake_cnn.py       <- singurul fișier Python
+│
+├── data/
+│    |
+│    ├── train/
+│    │    ├── real/
+│    │    └── fake/
+│    │
+│    └── validation/
+│         ├── video001.mp4
+│         ├── video002.mp4
+│         └── ...
+│
+└── models/
+     └── cnn_deepfake.keras
+
+În deepfake_cnn.py vei avea secțiuni clare:
+
+# ======================
+# 1. IMPORTURI
+# ======================
+
+import os
+import cv2
+import numpy as np
+import tensorflow as tf
+
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import (
+    Conv2D,
+    MaxPooling2D,
+    Flatten,
+    Dense,
+    Dropout
+)
+# ======================
+# 2. EXTRAGERE CADRE
+# ======================
+
+def extragere_cadre(video_path, nr_cadre=25):
+
+    cap = cv2.VideoCapture(video_path)
+
+    total_cadre = int(
+        cap.get(cv2.CAP_PROP_FRAME_COUNT)
+    )
+
+    cadre=[]
+
+    indexi=np.linspace(
+        0,
+        total_cadre-1,
+        nr_cadre
+    ).astype(int)
+
+
+    for index in indexi:
+
+        cap.set(
+            cv2.CAP_PROP_POS_FRAMES,
+            index
+        )
+
+        ret,cadru=cap.read()
+
+        if ret:
+
+            cadru=cv2.cvtColor(
+                cadru,
+                cv2.COLOR_BGR2RGB
+            )
+
+            cadru=cv2.resize(
+                cadru,
+                (224,224)
+            )
+
+            cadre.append(cadru)
+
+
+    cap.release()
+
+    return np.array(cadre)
+# ======================
+# 3. INCARCARE DATASET
+# ======================
+
+def incarca_dataset(folder):
+
+    X=[]
+    y=[]
+
+
+    real=os.path.join(folder,"real")
+    fake=os.path.join(folder,"fake")
+
+
+    for video in os.listdir(real):
+
+        if video.endswith(".mp4"):
+
+            cadre=extragere_cadre(
+                os.path.join(real,video)
+            )
+
+            for cadru in cadre:
+
+                X.append(cadru)
+                y.append(0)
+
+
+
+    for video in os.listdir(fake):
+
+        if video.endswith(".mp4"):
+
+            cadre=extragere_cadre(
+                os.path.join(fake,video)
+            )
+
+            for cadru in cadre:
+
+                X.append(cadru)
+                y.append(1)
+
+
+
+    return np.array(X), np.array(y)
+# ======================
+# 4. MODEL CNN
+# ======================
+
+def creare_model():
+
+    model=Sequential([
+
+        Conv2D(
+            32,
+            (3,3),
+            activation="relu",
+            input_shape=(224,224,3)
+        ),
+
+        MaxPooling2D(),
+
+        Conv2D(
+            64,
+            (3,3),
+            activation="relu"
+        ),
+
+        MaxPooling2D(),
+
+        Flatten(),
+
+        Dense(
+            128,
+            activation="relu"
+        ),
+
+        Dropout(0.5),
+
+        Dense(
+            1,
+            activation="sigmoid"
+        )
+    ])
+
+
+    model.compile(
+        optimizer="adam",
+        loss="binary_crossentropy",
+        metrics=["accuracy"]
+    )
+
+    return model
+
+Apoi partea principală:
+
+# ======================
+# 5. ANTRENARE
+# ======================
+
+X_train,y_train = incarca_dataset(
+    "data/train"
+)
+
+
+X_train=X_train/255.0
+
+
+model=creare_model()
+
+
+model.fit(
+    X_train,
+    y_train,
+    epochs=10,
+    batch_size=16
+)
+
+
+model.save(
+    "models/cnn_deepfake.keras"
+)
+
+După antrenare:
+
+# ======================
+# 6. TESTARE VALIDATION
+# ======================
+
+model=tf.keras.models.load_model(
+    "models/cnn_deepfake.keras"
+)
+
+
+validation_folder="data/validation"
+
+
+for video in os.listdir(validation_folder):
+
+    if video.endswith(".mp4"):
+
+        cadre=extragere_cadre(
+            os.path.join(validation_folder,video)
+        )
+
+
+        cadre=cadre/255.0
+
+
+        predictii=model.predict(cadre)
+
+
+        scor=np.mean(predictii)
+
+
+        print(
+            video,
+            scor
+        )
+
+
+        if scor>0.5:
+            print("FAKE")
+        else:
+            print("REAL")
+
+Deci da, un singur .py este posibil și pentru început este chiar mai ușor de gestionat prin SSH.
+
+Totuși, pentru Celeb-DF complet trebuie să facem o modificare înainte de antrenarea finală: funcția incarca_dataset() de mai sus ține toate cadrele în RAM. Pentru un test mic merge, dar pentru tot Celeb-DF va trebui schimbată într-un generator (tf.data.Dataset), altfel poți rămâne fără memorie.
+
+Pentru primul test pe GPU aș face exact așa:
+
+5-10 videoclipuri real;
+5-10 videoclipuri fake;
+verificăm că GPU-ul este folosit;
+verificăm că modelul se antrenează;
+apoi trecem la varianta mare pentru Celeb-DF.
+
+
+Da, poți încheia pe ziua de azi fără probleme. Ai făcut deja partea importantă: ai clarificat arhitectura proiectului și ai identificat ce trebuie mutat pe server. Nu are rost să începi transferurile până nu ai puțin organizat ce trimiți.
+
+Ca să fii pregătit pentru următoarea sesiune, aș face doar o listă de verificare.
+
+Ce trebuie să ai pregătit pe calculator înainte de upload
+1. Fișierul Python
+
+De exemplu:
+
+deepfake_cnn.py
+
+În el vei avea:
+
+importurile;
+funcția de extragere cadre;
+încărcarea datasetului;
+modelul CNN;
+antrenarea;
+salvarea modelului;
+testarea.
+
+Momentan poți pune codul tău acolo, chiar dacă încă îl vom îmbunătăți.
+
+2. Structura folderelor
+
+Pregătește ceva de genul:
+
+Deepfake_Project/
+
+│
+├── deepfake_cnn.py
+│
+├── data/
+│   |
+│   ├── train/
+│   │   |
+│   │   ├── real/
+│   │   |
+│   │   └── fake/
+│   |
+│   └── validation/
+│       |
+│       ├── video1.mp4
+│       ├── video2.mp4
+│       └── ...
+│
+└── models/
+
+Folderul models poate fi gol la început.
+
+După antrenare va apărea:
+
+models/
+    cnn_deepfake.keras
+Ce NU trebuie să transferi
+
+Nu transfera:
+
+❌ mediul deepfake_env
+
+Adică nu copia:
+
+deepfake_env/
+
+Pe server ai deja mediul.
+
+Instalarea librăriilor se face acolo cu:
+
+pip install ...
+
+❌ Nu transfera toate cadrele extrase
+
+Nu trebuie să faci:
+
+video.mp4
+ ↓
+25 imagini jpg
+ ↓
+upload
+
+Mai bine:
+
+video.mp4
+ ↓
+server
+ ↓
+OpenCV extrage cadre
+
+Economisești enorm spațiu.
+
+Ce trebuie verificat înainte de upload
+
+Pe server:
+
+nvidia-smi
+
+Este important să vedem GPU-ul.
+
+Apoi:
+
+python
+
+și:
+
+import tensorflow as tf
+
+print(tf.config.list_physical_devices('GPU'))
+
+Încă nu am rezolvat partea cu GPU-ul, deci acesta va fi primul lucru data viitoare.
+
+Ce ar fi util să ai pregătit ca informații despre dataset
+
+Notează:
+
+unde este folderul Celeb-DF;
+cum se numesc folderele real/fake;
+câte videoclipuri ai.
+
+Exemplu:
+
+Celeb-real          -> real
+YouTube-real        -> real
+Celeb-synthesis     -> fake
+
+Pentru că loader-ul trebuie adaptat exact la structura ta.
+
+Ordinea de lucru când revii
+
+Aș face așa:
+
+Pas 1
+
+Rezolvăm GPU:
+
+nvidia-smi
+
+și TensorFlow GPU.
+
+Pas 2
+
+Urcăm un test mic:
+
+5 video real
+5 video fake
+Pas 3
+
+Rulăm:
+
+python deepfake_cnn.py
+
+și verificăm:
+
+dacă citește videoclipurile;
+dacă extrage cadre;
+dacă GPU-ul este folosit;
+dacă modelul face epoch-uri.
+Pas 4
+
+Extindem la Celeb-DF complet.
+
+Un singur lucru pe care îl aș avea în vedere: CNN-ul tău actual este bun ca prim experiment, dar pentru deepfake video probabil va fi mai slab decât o abordare CNN + LSTM, pentru că acum tratează fiecare cadru separat și pierde informația temporală. Dar este foarte bun ca bază de comparație.
+
+Deci pentru azi ai suficient:
+
+nu mai transfera nimic încă;
+păstrează codul;
+pregătește folderul proiectului;
+data viitoare facem conectarea GPU + upload + primul antrenament.
+
+
+
+
+deci gata pot sa inchid totul, dar vreau sa imi spui cum sa deschid jupiter notebook si asta: (deepfake_env) practica@ubuntu63:~$ exit
+logout
+Connection to 192.168.7.63 closed.
+
+C:\Users\andra>
+
+Da, poți închide tot pentru astăzi. 😊 Ai făcut destul de mult: ai instalat mediul, ai testat TensorFlow, ai început CNN-ul și ai stabilit cum vei organiza proiectul.
+
+1. Poți închide terminalul
+
+Acum ești deja ieșită de pe server:
+
+(deepfake_env) practica@ubuntu63:~$ exit
+logout
+Connection to 192.168.7.63 closed.
+
+C:\Users\andra>
+
+Poți închide fără probleme fereastra de Command Prompt sau PowerShell.
+
+2. Cum deschizi din nou Jupyter Notebook pe laptop (Windows)
+
+Dacă vrei să continui să lucrezi local:
+
+Deschide Anaconda Prompt sau Miniconda Prompt și scrie:
+
+conda activate testareDeepfake
+
+(apoi numele mediului tău, dacă acesta este testareDeepfake).
+
+Apoi:
+
+jupyter notebook
+
+Se va deschide browserul cu Jupyter Notebook.
+
+3. Cum te reconectezi la serverul Ubuntu
+
+Deschizi Command Prompt sau PowerShell și scrii:
+
+ssh practica@192.168.7.63
+
+Introduci parola dacă este cerută.
+
+Activezi mediul:
+
+source deepfake_env/bin/activate
+
+sau, dacă mediul este unul Conda:
+
+conda activate deepfake_env
+
+(depinde cum a fost creat; vom verifica data viitoare dacă este venv sau conda).
+
+4. Cum pornești Jupyter pe server (când vom lucra pe GPU)
+
+După ce te conectezi prin SSH și activezi mediul:
+
+jupyter notebook --no-browser --port=8888
+
+sau:
+
+jupyter lab --no-browser --port=8888
+
+Apoi faci tunelul SSH de pe calculatorul tău și deschizi în browser:
+
+http://localhost:8888
+
+Vom face împreună acești pași când ajungem acolo.
+
+5. Ce vom face data viitoare
+
+Planul este destul de clar:
+
+✔ Verificăm definitiv partea de GPU (TensorFlow + CUDA).
+✔ Transferăm proiectul pe server.
+✔ Transferăm un subset din Celeb-DF.
+✔ Adaptăm codul pentru întregul dataset.
+✔ Antrenăm CNN.
+✔ Testăm pe setul de validare.
+✔ Calculăm acuratețea și celelalte metrici.
+
+Cred că este un plan realist și ușor de urmărit, fără să încercăm să facem totul dintr-o dată.
+
+Spor la odihnă și ne ocupăm de partea practică pas cu pas când reiei proiectul.

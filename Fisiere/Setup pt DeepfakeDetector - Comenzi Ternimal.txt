@@ -1,0 +1,8 @@
+## Setup pt DeepfakeDetector
+
+PS C:\Users\andra> Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
+PS C:\Users\andra> py -3.11 -m venv venv
+PS C:\Users\andra> venv\Scripts\activate
+(venv) PS C:\Users\andra> cd .\DeepfakeDetector\
+(venv) PS C:\Users\andra\DeepfakeDetector> pip install -r requirements.txt
+(venv) PS C:\Users\andra\DeepfakeDetector> python web-app.py

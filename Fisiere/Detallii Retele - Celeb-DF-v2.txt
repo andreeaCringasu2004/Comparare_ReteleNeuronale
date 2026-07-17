@@ -1,0 +1,418 @@
+Detallii Retele - Celeb-DF-v2
+
+CNN - pur
+
+Train
+
+(deepfake_env) practica@ubuntu63:~/deepfake_env/Comparare_ReteleNeuronale$ python ./Retele_Neuronale/CNN_pur/train.py
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1784269898.908383 1617718 cpu_feature_guard.cc:227] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+To enable the following instructions: AVX2 FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+Device folosit: cuda
+
+Clase:
+['fake', 'real']
+Imagini train: 26111
+Imagini validation: 6530
+
+Epoch 1/50
+Loss: 0.6979
+Train Accuracy: 0.8590
+Validation Accuracy: 0.8637
+Learning Rate: 0.001
+Model nou salvat!
+
+Epoch 2/50
+Loss: 0.3932
+Train Accuracy: 0.8703
+Validation Accuracy: 0.8669
+Learning Rate: 0.001
+Model nou salvat!
+
+Epoch 3/50
+Loss: 0.3816
+Train Accuracy: 0.8737
+Validation Accuracy: 0.8824
+Learning Rate: 0.001
+Model nou salvat!
+
+Epoch 4/50
+Loss: 0.3683
+Train Accuracy: 0.8781
+Validation Accuracy: 0.8806
+Learning Rate: 0.001
+Fara imbunatatire: 1/5
+
+Epoch 5/50
+Loss: 0.3588
+Train Accuracy: 0.8827
+Validation Accuracy: 0.8868
+Learning Rate: 0.001
+Model nou salvat!
+
+Epoch 6/50
+Loss: 0.3534
+Train Accuracy: 0.8855
+Validation Accuracy: 0.8851
+Learning Rate: 0.001
+Fara imbunatatire: 1/5
+
+Epoch 7/50
+Loss: 0.3508
+Train Accuracy: 0.8863
+Validation Accuracy: 0.8832
+Learning Rate: 0.001
+Fara imbunatatire: 2/5
+
+Epoch 8/50
+Loss: 0.3503
+Train Accuracy: 0.8873
+Validation Accuracy: 0.8824
+Learning Rate: 0.0005
+Fara imbunatatire: 3/5
+
+Epoch 9/50
+Loss: 0.3421
+Train Accuracy: 0.8903
+Validation Accuracy: 0.8853
+Learning Rate: 0.0005
+Fara imbunatatire: 4/5
+
+Epoch 10/50
+Loss: 0.3433
+Train Accuracy: 0.8894
+Validation Accuracy: 0.8870
+Learning Rate: 0.0005
+Model nou salvat!
+
+Epoch 11/50
+Loss: 0.3418
+Train Accuracy: 0.8905
+Validation Accuracy: 0.8850
+Learning Rate: 0.0005
+Fara imbunatatire: 1/5
+
+Epoch 12/50
+Loss: 0.3392
+Train Accuracy: 0.8916
+Validation Accuracy: 0.8870
+Learning Rate: 0.0005
+Fara imbunatatire: 2/5
+
+Epoch 13/50
+Loss: 0.3406
+Train Accuracy: 0.8914
+Validation Accuracy: 0.8859
+Learning Rate: 0.00025
+Fara imbunatatire: 3/5
+
+Epoch 14/50
+Loss: 0.3369
+Train Accuracy: 0.8930
+Validation Accuracy: 0.8893
+Learning Rate: 0.00025
+Model nou salvat!
+
+Epoch 15/50
+Loss: 0.3346
+Train Accuracy: 0.8935
+Validation Accuracy: 0.8900
+Learning Rate: 0.00025
+Model nou salvat!
+
+Epoch 16/50
+Loss: 0.3362
+Train Accuracy: 0.8932
+Validation Accuracy: 0.8868
+Learning Rate: 0.00025
+Fara imbunatatire: 1/5
+
+Epoch 17/50
+Loss: 0.3343
+Train Accuracy: 0.8938
+Validation Accuracy: 0.8884
+Learning Rate: 0.00025
+Fara imbunatatire: 2/5
+
+Epoch 18/50
+Loss: 0.3330
+Train Accuracy: 0.8945
+Validation Accuracy: 0.8879
+Learning Rate: 0.000125
+Fara imbunatatire: 3/5
+
+Epoch 19/50
+Loss: 0.3332
+Train Accuracy: 0.8945
+Validation Accuracy: 0.8893
+Learning Rate: 0.000125
+Fara imbunatatire: 4/5
+
+Epoch 20/50
+Loss: 0.3312
+Train Accuracy: 0.8952
+Validation Accuracy: 0.8899
+Learning Rate: 0.000125
+Fara imbunatatire: 5/5
+
+Early stopping activat!
+
+Antrenare terminata!
+Cea mai buna accuracy: 0.8900459418070444
+Model: best_cnn_pur.pt
+
+Test
+
+(deepfake_env) practica@ubuntu63:~/deepfake_env/Comparare_ReteleNeuronale$ python ./Retele_Neuronale/CNN_pur/test.py
+['fake', 'real']
+
+===== CNN PUR =====
+Accuracy: 0.8900459418070444
+Precision: 1.0
+Recall: 0.19325842696629214
+F1: 0.3239171374764595
+              precision    recall  f1-score   support
+
+        fake       0.89      1.00      0.94      5640
+        real       1.00      0.19      0.32       890
+
+    accuracy                           0.89      6530
+   macro avg       0.94      0.60      0.63      6530
+weighted avg       0.90      0.89      0.86      6530
+
+Confusion matrix:
+[[5640    0]
+ [ 718  172]]
+
+CNN + LSTM
+
+Train
+
+(deepfake_env) practica@ubuntu63:~/deepfake_env/Comparare_ReteleNeuronale$ python ./Retele_Neuronale/CNN_LSTM_comb/train.py
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1784271854.039852 1631254 cpu_feature_guard.cc:227] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+To enable the following instructions: AVX2 FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+Device folosit: cuda
+
+Secvente train: 2610
+Secvente validation: 653
+
+Epoch 1/50
+Loss: 0.4110
+Train Accuracy: 0.8640
+Validation Accuracy: 0.8637
+Learning Rate: 0.001
+Model nou salvat!
+
+Epoch 2/50
+Loss: 0.4042
+Train Accuracy: 0.8640
+Validation Accuracy: 0.8637
+Learning Rate: 0.001
+Fara imbunatatire: 1/5
+
+Epoch 3/50
+Loss: 0.4038
+Train Accuracy: 0.8640
+Validation Accuracy: 0.8637
+Learning Rate: 0.001
+Fara imbunatatire: 2/5
+
+Epoch 4/50
+Loss: 0.4019
+Train Accuracy: 0.8640
+Validation Accuracy: 0.8637
+Learning Rate: 0.001
+Fara imbunatatire: 3/5
+
+Epoch 5/50
+Loss: 0.4008
+Train Accuracy: 0.8640
+Validation Accuracy: 0.8637
+Learning Rate: 0.0005
+Fara imbunatatire: 4/5
+
+Epoch 6/50
+Loss: 0.3967
+Train Accuracy: 0.8640
+Validation Accuracy: 0.8637
+Learning Rate: 0.0005
+Fara imbunatatire: 5/5
+
+Early stopping activat!
+
+Antrenare terminata!
+Cea mai buna accuracy: 0.8637059724349158
+Model: best_cnn_lstm.pth
+
+Test
+
+
+
+REPRAT - IMBUNATATIT
+
+Train
+
+(deepfake_env) practica@ubuntu63:~/deepfake_env/Comparare_ReteleNeuronale$ python ./Retele_Neuronale/CNN_LSTM_comb/train.py
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1784271854.039852 1631254 cpu_feature_guard.cc:227] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+To enable the following instructions: AVX2 FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+Device folosit: cuda
+
+Secvente train: 2610
+Secvente validation: 653
+
+Epoch 1/50
+Loss: 0.4110
+Train Accuracy: 0.8640
+Validation Accuracy: 0.8637
+Learning Rate: 0.001
+Model nou salvat!
+
+Epoch 2/50
+Loss: 0.4042
+Train Accuracy: 0.8640
+Validation Accuracy: 0.8637
+Learning Rate: 0.001
+Fara imbunatatire: 1/5
+
+Epoch 3/50
+Loss: 0.4038
+Train Accuracy: 0.8640
+Validation Accuracy: 0.8637
+Learning Rate: 0.001
+Fara imbunatatire: 2/5
+
+Epoch 4/50
+Loss: 0.4019
+Train Accuracy: 0.8640
+Validation Accuracy: 0.8637
+Learning Rate: 0.001
+Fara imbunatatire: 3/5
+
+Epoch 5/50
+Loss: 0.4008
+Train Accuracy: 0.8640
+Validation Accuracy: 0.8637
+Learning Rate: 0.0005
+Fara imbunatatire: 4/5
+
+Epoch 6/50
+Loss: 0.3967
+Train Accuracy: 0.8640
+Validation Accuracy: 0.8637
+Learning Rate: 0.0005
+Fara imbunatatire: 5/5
+
+Early stopping activat!
+
+Antrenare terminata!
+Cea mai buna accuracy: 0.8637059724349158
+Model: best_cnn_lstm.pth
+
+//----------------------
+
+(deepfake_env) practica@ubuntu63:~/deepfake_env/Comparare_ReteleNeuronale$ python ./Retele_Neuronale/CNN_LSTM_comb/train.py
+WARNING: All log messages before absl::InitializeLog() is called are written to STDERR
+I0000 00:00:1784274476.777977 1648873 cpu_feature_guard.cc:227] This TensorFlow binary is optimized to use available CPU instructions in performance-critical operations.
+To enable the following instructions: AVX2 FMA, in other operations, rebuild TensorFlow with the appropriate compiler flags.
+Device folosit: cuda
+Class weights: tensor([1.0000, 6.3521], device='cuda:0')
+
+Secvente train: 2610
+Secvente validation: 653
+['fake', 'real']
+
+Epoch 1/50
+Loss: 0.6755
+Train Accuracy: 0.8215
+Validation Accuracy: 0.8545
+Learning Rate: 0.001
+Model nou salvat!
+['fake', 'real']
+
+Epoch 2/50
+Loss: 0.6712
+Train Accuracy: 0.8192
+Validation Accuracy: 0.8055
+Learning Rate: 0.001
+Fara imbunatatire: 1/5
+['fake', 'real']
+
+Epoch 3/50
+Loss: 0.6678
+Train Accuracy: 0.8157
+Validation Accuracy: 0.8637
+Learning Rate: 0.001
+Model nou salvat!
+['fake', 'real']
+
+Epoch 4/50
+Loss: 0.6638
+Train Accuracy: 0.8241
+Validation Accuracy: 0.8637
+Learning Rate: 0.001
+Fara imbunatatire: 1/5
+['fake', 'real']
+
+Epoch 5/50
+Loss: 0.6736
+Train Accuracy: 0.7667
+Validation Accuracy: 0.7519
+Learning Rate: 0.001
+Fara imbunatatire: 2/5
+['fake', 'real']
+
+Epoch 6/50
+Loss: 0.6662
+Train Accuracy: 0.8077
+Validation Accuracy: 0.7734
+Learning Rate: 0.001
+Fara imbunatatire: 3/5
+['fake', 'real']
+
+Epoch 7/50
+Loss: 0.6655
+Train Accuracy: 0.7728
+Validation Accuracy: 0.8545
+Learning Rate: 0.0005
+Fara imbunatatire: 4/5
+['fake', 'real']
+
+Epoch 8/50
+Loss: 0.6684
+Train Accuracy: 0.8268
+Validation Accuracy: 0.8637
+Learning Rate: 0.0005
+Fara imbunatatire: 5/5
+
+Early stopping activat!
+
+Antrenare terminata!
+Cea mai buna accuracy: 0.8637059724349158
+Model: best_cnn_lstm.pth
+(deepfake_env) practica@ubuntu63:~/deepfake_env/Comparare_ReteleNeuronale$ python ./Retele_Neuronale/CNN_LSTM_comb/test.py
+Clase: ['fake', 'real']
+Distributie: Counter({0: 564, 1: 89})
+
+====================
+CNN + LSTM RESULTS
+====================
+['fake', 'real']
+0.8637059724349158
+              precision    recall  f1-score   support
+
+        fake       0.86      1.00      0.93       564
+        real       0.00      0.00      0.00        89
+
+    accuracy                           0.86       653
+   macro avg       0.43      0.50      0.46       653
+weighted avg       0.75      0.86      0.80       653
+
+Confusion Matrix:
+[[564   0]
+ [ 89   0]]
+
+
+!! vocabular, cum sa gandesti programul pe baza vocabularului si aplicabilitate
+sa incerc sa iau invers adica sa iau recall-ul invers adica sa detectez realele din plaja de fake-uri si sa fie tottul cat mai detaliat ~ annomally detection
