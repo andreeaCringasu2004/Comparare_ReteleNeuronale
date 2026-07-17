@@ -7,6 +7,9 @@ torch.backends.cudnn.enabled = False
 from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 
+from torch.utils.tensorboard import SummaryWriter
+from datetime import datetime
+
 from model import CNNPur
 
 
@@ -32,7 +35,7 @@ print("Device folosit:", DEVICE)
 # =========================
 
 BASE_PATH = os.path.expanduser(
-    "~/deepfake_env/Comparare_ReteleNeuronale/videos/Celeb-DF"
+    "~/deepfake_env/Comparare_ReteleNeuronale/videos/Celeb-DF-v2"
 )
 
 
@@ -184,7 +187,13 @@ scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
     patience=2
 )
 
+# =========================
+# WRITER TensorBoard
+# =========================
 
+writer = SummaryWriter(
+    f"runs/CNN_pur/{datetime.now().strftime('%Y%m%d-%H%M%S')}"
+)
 
 # =========================
 # EARLY STOPPING
@@ -358,6 +367,12 @@ for epoch in range(EPOCHS):
     current_lr = optimizer.param_groups[0]["lr"]
 
 
+    # For tensorboard
+
+    writer.add_scalar("Loss/train", train_loss, epoch)
+    writer.add_scalar("Accuracy/train", train_accuracy, epoch)
+    writer.add_scalar("Accuracy/validation", val_accuracy, epoch)
+    writer.add_scalar("LearningRate", current_lr, epoch)
 
     print(
         f"Loss: {train_loss:.4f}"
@@ -418,6 +433,8 @@ for epoch in range(EPOCHS):
         early_stop_counter = 0
 
 
+        writer.add_scalar("BestValidationAccuracy", best_accuracy, epoch)
+
 
         torch.save(
 
@@ -476,6 +493,8 @@ with open(
         indent=4
     )
 
+
+writer.close()
 
 
 print("\nAntrenare terminata!")

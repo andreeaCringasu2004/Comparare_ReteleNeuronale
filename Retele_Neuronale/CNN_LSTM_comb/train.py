@@ -6,9 +6,13 @@ torch.backends.cudnn.enabled = False
 from torch.utils.data import DataLoader
 from torchvision import transforms
 
+from torch.utils.tensorboard import SummaryWriter
+from datetime import datetime
+
 from dataset import VideoFrameDataset
 from model import CNNLSTM
 
+from collections import Counter
 
 
 # =====================
@@ -43,7 +47,7 @@ print(
 
 BASE_PATH = os.path.expanduser(
 
-    "~/deepfake_env/Comparare_ReteleNeuronale/videos/Celeb-DF"
+    "~/deepfake_env/Comparare_ReteleNeuronale/videos/Celeb-DF-v2"
 
 )
 
@@ -111,6 +115,25 @@ train_dataset = VideoFrameDataset(
 
 )
 
+class_counts = Counter(
+    label for _, label in train_dataset.samples
+)
+
+fake_count = class_counts[0]
+real_count = class_counts[1]
+
+
+class_weights = torch.tensor(
+    [
+        1.0,
+        fake_count / real_count
+    ],
+    dtype=torch.float32,
+    device=DEVICE
+)
+
+
+print("Class weights:", class_weights)
 
 
 val_dataset = VideoFrameDataset(
@@ -176,12 +199,13 @@ print(
 # MODEL
 # =====================
 
-
 model = CNNLSTM().to(DEVICE)
 
 
 
-criterion = torch.nn.CrossEntropyLoss()
+criterion = torch.nn.CrossEntropyLoss(
+    weight=class_weights
+)
 
 
 
@@ -205,6 +229,11 @@ scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
 
     patience=3
 
+)
+
+
+writer = SummaryWriter(
+    f"runs/CNN_LSTM_comb/{datetime.now().strftime('%Y%m%d-%H%M%S')}"
 )
 
 
@@ -382,6 +411,32 @@ for epoch in range(EPOCHS):
     current_lr = optimizer.param_groups[0]["lr"]
 
 
+    writer.add_scalar(
+        "Loss/train",
+        train_loss,
+        epoch
+    )
+
+    writer.add_scalar(
+        "Accuracy/train",
+        train_acc,
+        epoch
+    )
+
+    writer.add_scalar(
+        "Accuracy/validation",
+        val_acc,
+        epoch
+    )
+
+    writer.add_scalar(
+        "LearningRate",
+        current_lr,
+        epoch
+    )
+
+
+    print(train_dataset.classes)
 
     print()
 
@@ -423,7 +478,11 @@ for epoch in range(EPOCHS):
 
         counter = 0
 
-
+        writer.add_scalar(
+            "BestValidationAccuracy",
+            best_acc,
+            epoch
+        )
 
         torch.save(
 
@@ -464,7 +523,7 @@ for epoch in range(EPOCHS):
 
         break
 
-
+writer.close()
 
 print()
 

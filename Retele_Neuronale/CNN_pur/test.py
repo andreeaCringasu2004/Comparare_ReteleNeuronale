@@ -28,7 +28,7 @@ MODEL_PATH = "best_cnn_pur.pth"
 
 
 BASE_PATH = os.path.expanduser(
-    "~/deepfake_env/Comparare_ReteleNeuronale/videos/Celeb-DF"
+    "~/deepfake_env/Comparare_ReteleNeuronale/videos/Celeb-DF-v2"
 )
 
 

@@ -12,6 +12,8 @@ from dataset import VideoFrameDataset
 
 from model import CNNLSTM
 
+from collections import Counter
+
 
 
 DEVICE="cuda" if torch.cuda.is_available() else "cpu"
@@ -38,7 +40,7 @@ transform=transforms.Compose([
 
 dataset=VideoFrameDataset(
 
-    "/home/practica/deepfake_env/Comparare_ReteleNeuronale/videos/Celeb-DF/validation",
+    "/home/practica/deepfake_env/Comparare_ReteleNeuronale/videos/Celeb-DF-v2/validation",
 
     10,
 
@@ -46,7 +48,13 @@ dataset=VideoFrameDataset(
 
 )
 
-
+print("Clase:", dataset.classes)
+print(
+    "Distributie:",
+    Counter(
+        label for _, label in dataset.samples
+    )
+)
 
 loader=DataLoader(
 
@@ -121,6 +129,9 @@ print("CNN + LSTM RESULTS")
 print("====================")
 
 
+print(dataset.classes)
+
+
 print(
 
 accuracy_score(
@@ -139,7 +150,9 @@ classification_report(
 
     y_pred,
 
-    target_names=dataset.classes
+    target_names=dataset.classes,
+
+    zero_division=0
 
 )
 
